@@ -144,7 +144,7 @@
    <translation id="tools_lineDiagnostics_robot_resolvedAfterTests" qtlid="326886">Las pruebas realizadas han permitido solucionar el problema. El diagnóstico ha finalizado.</translation>
    <translation id="tools_lineDiagnostics_robot_interventionRequested" qtlid="326899">Se ha solicitado una intervención. Le hemos enviado los detalles de dicha intervención por correo electrónico.</translation>
    <translation id="tools_lineDiagnostics_robot_interventionRequested_otrsticket">Número del tíquet: {{ovhTicket}}</translation>
-   <translation id="tools_lineDiagnostics_robot_interventionRequested_operatorticketid" qtlid="326925">Número del tíquet de intervención FT: {{operatorTicketId}}</translation>
+   <translation id="tools_lineDiagnostics_robot_interventionRequested_operatorticketid">Número del tíquet de intervención opérateur: {{operatorTicketId}}</translation>
    <translation id="tools_lineDiagnostics_robot_interventionRequested_ovhinterventionid" qtlid="326938">Número del tíquet de intervención de OVH: {{ovhInterventionId}}</translation>
    <translation id="tools_lineDiagnostics_robot_noSyncFaultDiagnosticRequired" qtlid="407585">Il ne s'agit pas d'un problème d'alignement. Il est nécessaire de lancer un diagnostic correspondant au problème d'absence de synchronisation (noSync fault).</translation>
    <translation id="tools_lineDiagnostics_robot_connectionProblem" qtlid="407598">Il ne s'agit pas d'un problème d'alignement mais d'un défaut de connexion. Il peut s'agir d'un problème d'ordre général. Si le problème n'est pas résolu au bout 24h, vous pouvez contacter le support OVH.</translation>
