@@ -1,6 +1,435 @@
 "use strict";
 
-angular.module("ovh-angular-line-diagnostics", []);
+var _createClass = function () { function defineProperties(target, props) { for (var i = 0; i < props.length; i++) { var descriptor = props[i]; descriptor.enumerable = descriptor.enumerable || false; descriptor.configurable = true; if ("value" in descriptor) descriptor.writable = true; Object.defineProperty(target, descriptor.key, descriptor); } } return function (Constructor, protoProps, staticProps) { if (protoProps) defineProperties(Constructor.prototype, protoProps); if (staticProps) defineProperties(Constructor, staticProps); return Constructor; }; }();
+
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+angular.module("ovh-angular-line-diagnostics", ["ovh-api-services"]);
+
+angular.module("ovh-angular-line-diagnostics").component("lineDiagnostics", {
+    bindings: {
+        lineNumber: "@",
+        serviceName: "@"
+    },
+    templateUrl: "/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/ovh-angular-line-diagnostics.html",
+    controller: "LineDiagnosticsCtrl"
+});
+
+angular.module("ovh-angular-line-diagnostics").constant("DIAGNOSTICS_CONSTANTS", {
+    PROGRESS_BAR: {
+        INTERVAL: 1000,
+        STEP: 20,
+        LIMIT: 90
+    },
+    STEPS: {
+        DETECTION: {
+            LABEL: "detectionStep",
+            ACTIONS: ["unplugModem"],
+            QUESTIONS: ["modemIsSynchronized"]
+        },
+        INVESTIGATION: {
+            LABEL: "investigationStep",
+            ACTIONS: ["modemIsSynchronized", "modemStillSynchronized"],
+            ACTIONS_AS_QUESTIONS: ["checkFilter", "checkConnectionCable"],
+            QUESTIONS: ["modemIsSynchronized", "modemStillSynchronized", "severalInternetConnections", "hasModemKeptSynchronization"],
+            SPECIFIC_QUESTIONS: ["problemType", "downloadBandwidthTest", "uploadBandwidthTest", "bandwidthTestUnit"]
+        },
+        SOLUTION_PROPOSAL: {
+            LABEL: "solutionProposalStep",
+            APPOINTMENT_QUESTIONS_FORM: ["idAppointment", "individualSite", "secureSite", "siteClosedDays", "siteOpening"],
+            TIME_PERIOD_QUESTIONS: ["startMorningHours", "endMorningHours", "startAfternoonHours", "endAfternoonHours"]
+        }
+    },
+    ROBOT_ACTION: {
+        LONG_TIME_ACTIONS: ["seltTest", "installationCheck"],
+        REQUEST_MONITORING: "requestMonitoring"
+    },
+    FAULT_TYPES: {
+        UNKNOWN: "unknown",
+        NO_SYNCHRONIZATION: "noSync",
+        ALIGNMENT: "alignment",
+        SYNC_LOSS_OR_LOW_BANDWIDTH: "syncLossOrLowBandwidth"
+    },
+    ERRORS: {
+        MONITORING_EXISTS: "monitoringTodoAlreadyExists"
+    },
+    STATUS: {
+        END: ["cancelled", "connectionProblem", "haveToConnectModemOnTheRightPlug", "interventionRequested", "resolvedAfterTests", "validationRefused", "waitingValidation", "noBandwidthFault"],
+        PAUSE: ["init", "sleeping", "waitingHuman"],
+        PROBLEM: "problem",
+        SPECIAL: [],
+        WAITING_ROBOT: "waitingRobot"
+    },
+    BANDWIDTH_TEST_SITE: "http://proof.ovh.net",
+    QUESTIONS_ENUM: {
+        BANDWIDTH_TEST_UNIT: ["Kbps", "Mbps"],
+        PROBLEM_TYPE: {
+            LOW_BANDWIDTH: "lowBandwidth",
+            SYNC_LOSS: "syncLoss"
+        }
+    }
+});
+
+angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl", function () {
+    LineDiagnosticsCtrl.$inject = ["$interval", "$q", "$state", "$timeout", "$translate", "LineDiagnostics", "LineDiagnosticFactory", "Toast", "DIAGNOSTICS_CONSTANTS"];
+    function LineDiagnosticsCtrl($interval, $q, $state, $timeout, $translate, LineDiagnostics, LineDiagnosticFactory, Toast, DIAGNOSTICS_CONSTANTS) {
+        _classCallCheck(this, LineDiagnosticsCtrl);
+
+        this.$interval = $interval;
+        this.$q = $q;
+        this.$state = $state;
+        this.$timeout = $timeout;
+        this.$translate = $translate;
+        this.LineDiagnosticsService = LineDiagnostics;
+        this.LineDiagnosticFactory = LineDiagnosticFactory;
+        this.Toast = Toast;
+
+        this.DIAGNOSTICS_CONSTANTS = DIAGNOSTICS_CONSTANTS;
+        this.bandwidthTestSite = this.DIAGNOSTICS_CONSTANTS.BANDWIDTH_TEST_SITE;
+        this.enumQuestions = {
+            bandwidthTestUnit: this.DIAGNOSTICS_CONSTANTS.QUESTIONS_ENUM.BANDWIDTH_TEST_UNIT,
+            problemType: this.DIAGNOSTICS_CONSTANTS.QUESTIONS_ENUM.PROBLEM_TYPE
+        };
+    }
+
+    _createClass(LineDiagnosticsCtrl, [{
+        key: "$onInit",
+        value: function $onInit() {
+            var _this = this;
+
+            var delayRequestStart = 3000;
+            this.currentLineDiagnostic = null;
+            this.currentStep = this.DIAGNOSTICS_CONSTANTS.STEPS.DETECTION.LABEL;
+            this.currentAction = null;
+            this.appointmentSlot = null;
+
+            this.actionRequired = false;
+            this.loading = false;
+            this.progressBarCycle = null;
+
+            this.LineDiagnosticsService.loadTranslations().then(function () {
+                _this.animateProgressBar();
+                _this.$timeout(function () {
+                    _this.runLineDiagnostic();
+                }, delayRequestStart);
+            }).catch(function () {
+                _this.Toast.error(_this.$translate.instant("tools_lineDiagnostics_error_loading_translations"));
+            });
+        }
+    }, {
+        key: "$onDestroy",
+        value: function $onDestroy() {
+            this.stopPoller();
+        }
+    }, {
+        key: "animateProgressBar",
+        value: function animateProgressBar() {
+            var _this2 = this;
+
+            this.detectionStepProgression = 0;
+            this.progressBarCycle = this.$interval(function () {
+                if (_this2.detectionStepProgression + _this2.DIAGNOSTICS_CONSTANTS.PROGRESS_BAR.STEP < _this2.DIAGNOSTICS_CONSTANTS.PROGRESS_BAR.LIMIT) {
+                    _this2.detectionStepProgression = _.random(_this2.detectionStepProgression, _this2.detectionStepProgression + _this2.DIAGNOSTICS_CONSTANTS.PROGRESS_BAR.STEP);
+                }
+            }, this.DIAGNOSTICS_CONSTANTS.PROGRESS_BAR.INTERVAL);
+        }
+    }, {
+        key: "runLineDiagnostic",
+        value: function runLineDiagnostic(requestParam) {
+            var _this3 = this;
+
+            this.loading = true;
+
+            return this.LineDiagnosticsService.getRunDiagnostic({
+                number: this.lineNumber,
+                serviceName: this.serviceName
+            }, requestParam).then(function (lineDiagnostic) {
+                _this3.buildLineDiagnostic(lineDiagnostic);
+                _this3.checkDiagnosticStatus(lineDiagnostic);
+                _this3.setCurrentStep();
+                _this3.getNextAction();
+
+                return lineDiagnostic;
+            }).catch(function (error) {
+                if (!_.isEmpty(error)) {
+                    _this3.checkDiagnosticStatus(error);
+                    _this3.Toast.error([_this3.$translate.instant("tools_lineDiagnostics_diagnostic_run_error"), error.message].join(" "));
+                }
+            }).finally(function () {
+                _this3.loading = false;
+                _this3.detectionStepProgression = 100;
+                if (_this3.progressBarCycle) {
+                    _this3.$interval.cancel(_this3.progressBarCycle);
+                    _this3.progressBarCycle = null;
+                }
+            });
+        }
+    }, {
+        key: "cancelLineDiagnostic",
+        value: function cancelLineDiagnostic() {
+            var _this4 = this;
+
+            return this.LineDiagnosticsService.getCancelDiagnostic({ number: this.lineNumber, serviceName: this.serviceName }).$promise.catch(function (error) {
+                _this4.Toast.error([_this4.$translate.instant("tools_lineDiagnostics_diagnostic_cancel_error"), _.get(error, "data.message", "")].join(" "));
+            });
+        }
+    }, {
+        key: "getNextAction",
+        value: function getNextAction() {
+            var _this5 = this;
+
+            this.currentAction = _.chain(this.currentLineDiagnostic.getActionsToDo()).filter(function (action) {
+                return !_.includes(_this5.currentLineDiagnostic.getActionsDone(), action);
+            }).first().value();
+        }
+    }, {
+        key: "goToInvestigationStep",
+        value: function goToInvestigationStep() {
+            this.diagnosticFromBeginning = false;
+            this.setCurrentStep();
+        }
+    }, {
+        key: "isActionAQuestion",
+        value: function isActionAQuestion(actionName) {
+            return this.DIAGNOSTICS_CONSTANTS.STEPS.INVESTIGATION.ACTIONS_AS_QUESTIONS.includes(actionName);
+        }
+    }, {
+        key: "getInvestigationStepQuestions",
+        value: function getInvestigationStepQuestions() {
+            var _this6 = this;
+
+            return this.currentLineDiagnostic.data.toAnswer.filter(function (question) {
+                return _this6.DIAGNOSTICS_CONSTANTS.STEPS.INVESTIGATION.QUESTIONS.includes(question.name);
+            });
+        }
+    }, {
+        key: "getInvestigationStepSpecificQuestions",
+        value: function getInvestigationStepSpecificQuestions() {
+            var _this7 = this;
+
+            return this.currentLineDiagnostic.data.toAnswer.filter(function (question) {
+                return _this7.DIAGNOSTICS_CONSTANTS.STEPS.INVESTIGATION.SPECIFIC_QUESTIONS.includes(question.name);
+            });
+        }
+    }, {
+        key: "setCurrentStep",
+        value: function setCurrentStep() {
+            var steps = this.DIAGNOSTICS_CONSTANTS.STEPS;
+
+            switch (this.currentLineDiagnostic.faultType) {
+                case this.DIAGNOSTICS_CONSTANTS.FAULT_TYPES.UNKNOWN:
+                    this.diagnosticFromBeginning = true;
+                    this.currentStep = steps.DETECTION.LABEL;
+                    break;
+                case this.DIAGNOSTICS_CONSTANTS.FAULT_TYPES.NO_SYNCHRONIZATION:
+                case this.DIAGNOSTICS_CONSTANTS.FAULT_TYPES.ALIGNMENT:
+                case this.DIAGNOSTICS_CONSTANTS.FAULT_TYPES.SYNC_LOSS_OR_LOW_BANDWIDTH:
+                    if (this.diagnosticFromBeginning) {
+                        this.currentStep = steps.DETECTION.LABEL;
+                    } else if (this.isOnFinalStep()) {
+                        this.currentStep = steps.SOLUTION_PROPOSAL.LABEL;
+                        this.bandwidthDetails = this.currentLineDiagnostic.extractBandwidthDetails();
+                    } else {
+                        this.currentStep = steps.INVESTIGATION.LABEL;
+                    }
+                    break;
+                default:
+                    this.currentStep = steps.DETECTION.LABEL;
+            }
+        }
+    }, {
+        key: "checkDiagnosticStatus",
+        value: function checkDiagnosticStatus(diagnosticResult) {
+            if (_.isEqual(diagnosticResult.status, this.DIAGNOSTICS_CONSTANTS.STATUS.WAITING_ROBOT)) {
+                this.startPoller();
+            } else {
+                this.stopPoller();
+                if (_.isEqual(diagnosticResult.status, this.DIAGNOSTICS_CONSTANTS.STATUS.PROBLEM) && !_.isEqual(_.get(diagnosticResult, "data.error", ""), this.DIAGNOSTICS_CONSTANTS.ERRORS.MONITORING_EXISTS)) {
+                    this.cancelLineDiagnostic();
+                }
+            }
+        }
+    }, {
+        key: "startPoller",
+        value: function startPoller() {
+            this.runLineDiagnostic(this.currentLineDiagnostic.convertToRequestParams());
+        }
+    }, {
+        key: "stopPoller",
+        value: function stopPoller() {
+            this.LineDiagnosticsService.deletePollDiagnostic();
+        }
+    }, {
+        key: "buildLineDiagnostic",
+        value: function buildLineDiagnostic(lineDiagnostic) {
+            this.currentLineDiagnostic = new this.LineDiagnosticFactory(lineDiagnostic);
+        }
+    }, {
+        key: "setModemUnplug",
+        value: function setModemUnplug(unplugAction) {
+            this.diagnosticFromBeginning = false;
+            this.addActionDone(unplugAction);
+        }
+    }, {
+        key: "isOnFinalStep",
+        value: function isOnFinalStep() {
+            return this.isDiagnosticComplete() || this.hasFinalStepQuestions() || this.isMonitoringAlreadyExists() || _.isEqual(this.currentLineDiagnostic.data.robotAction, this.DIAGNOSTICS_CONSTANTS.ROBOT_ACTION.REQUEST_MONITORING);
+        }
+    }, {
+        key: "isDiagnosticComplete",
+        value: function isDiagnosticComplete() {
+            var endStatus = this.DIAGNOSTICS_CONSTANTS.STATUS.END;
+            return _.includes(endStatus, _.get(this.currentLineDiagnostic, "status")) || this.isMonitoringAlreadyExists();
+        }
+    }, {
+        key: "hasFinalStepQuestions",
+        value: function hasFinalStepQuestions() {
+            return !_.isEmpty(this.currentLineDiagnostic.getQuestionsToAnswer()) && _.isEmpty(this.getInvestigationStepQuestions()) && _.isEmpty(this.getInvestigationStepSpecificQuestions()) && !this.currentLineDiagnostic.hasQuestionToAnswer("resolvedAfterTests");
+        }
+    }, {
+        key: "isMonitoringAlreadyExists",
+        value: function isMonitoringAlreadyExists() {
+            return _.isEqual(_.get(this.currentLineDiagnostic, "data.error", ""), this.DIAGNOSTICS_CONSTANTS.ERRORS.MONITORING_EXISTS);
+        }
+    }, {
+        key: "addActionDone",
+        value: function addActionDone(action) {
+            this.actionRequired = false;
+            this.currentLineDiagnostic.addActionDone(action);
+            this.startPoller();
+        }
+    }, {
+        key: "showWarning",
+        value: function showWarning() {
+            this.actionRequired = true;
+        }
+    }]);
+
+    return LineDiagnosticsCtrl;
+}());
+
+/**
+ *  @ngdoc object
+ *  @name ovh-angular-line-diagnostics.LineDiagnostic
+ *
+ *  @description
+ *  <p>Factory that describes a line diagnostic</p>
+ *
+ *  @constructor
+ *  @param {Object} lineDiagnostic               Object taht represents data of current line diagnostic returned by API
+ *                                               to create a new `LineDiagnostic` instance
+ *  @param {Number} lineDiagnostic.id            Id of the line diagnostic
+ *  @param {String} lineDiagnostic.faultType     Fault type of problem to diagnose (can be : 'noSync', 'alignment' or 'syncLossOrLowBandwidth')
+ *  @param {String} lineDiagnostic.status        Current status of the line diagnostic
+ */
+angular.module("ovh-angular-line-diagnostics").factory("LineDiagnosticFactory", ["DIAGNOSTICS_CONSTANTS", function (DIAGNOSTICS_CONSTANTS) {
+    var mandatoryParameters = ["data", "faultType", "id", "status"];
+
+    var LineDiagnostic = function () {
+        function LineDiagnostic(lineDiagnostic) {
+            _classCallCheck(this, LineDiagnostic);
+
+            _.forEach(mandatoryParameters, function (parameter) {
+                if (!_.has(lineDiagnostic, parameter)) {
+                    throw new Error(parameter + " parameter must be specified when creating a new LineDiagnostic");
+                }
+            });
+
+            this.id = lineDiagnostic.id;
+            this.faultType = lineDiagnostic.faultType;
+            this.status = lineDiagnostic.status;
+            this.data = lineDiagnostic.data;
+        }
+
+        _createClass(LineDiagnostic, [{
+            key: "isLongActionInProgress",
+            value: function isLongActionInProgress() {
+                return _.includes(DIAGNOSTICS_CONSTANTS.ROBOT_ACTION.LONG_TIME_ACTIONS, _.get(this, "data.robotAction", ""));
+            }
+        }, {
+            key: "extractBandwidthDetails",
+            value: function extractBandwidthDetails() {
+                return {
+                    theoricalBandwidth: {
+                        up: _.get(this.data, "lineDetails.lineCapabilities.up", "-"),
+                        down: _.get(this.data, "lineDetails.lineCapabilities.down", "-")
+                    },
+                    currentBandwidth: {
+                        up: _.get(this.data, "lineDetails.connectionInfo.upstreamSync", "-"),
+                        down: _.get(this.data, "lineDetails.connectionInfo.downstreamSync", "-")
+                    }
+                };
+            }
+        }, {
+            key: "getActionsToDo",
+            value: function getActionsToDo() {
+                var actionsToDo = _.get(this, "data.actionsToDo", []);
+                return _.chain(actionsToDo).map("name").flatten().value();
+            }
+        }, {
+            key: "getActionsDone",
+            value: function getActionsDone() {
+                return _.get(this, "data.actionsDone", []);
+            }
+        }, {
+            key: "addActionDone",
+            value: function addActionDone(actionToAdd) {
+                this.data.actionsDone.push(actionToAdd);
+            }
+        }, {
+            key: "getQuestionsToAnswer",
+            value: function getQuestionsToAnswer() {
+                var questions = _.get(this, "data.toAnswer", []);
+                return _.chain(questions).map("name").flatten().value();
+            }
+        }, {
+            key: "hasQuestionToAnswer",
+            value: function hasQuestionToAnswer(questionName) {
+                return _.includes(this.getQuestionsToAnswer(), questionName);
+            }
+        }, {
+            key: "getQuestionOptions",
+            value: function getQuestionOptions(questionName) {
+                var question = _.find(this.data.toAnswer, "name", questionName);
+                return question.possibleValues;
+            }
+        }, {
+            key: "needAppointmentDetails",
+            value: function needAppointmentDetails() {
+                var appointmentQuestions = DIAGNOSTICS_CONSTANTS.STEPS.SOLUTION_PROPOSAL.APPOINTMENT_QUESTIONS_FORM;
+                return _.some(_.filter(this.getQuestionsToAnswer(), function (toAnswer) {
+                    return _.includes(appointmentQuestions, toAnswer);
+                }));
+            }
+        }, {
+            key: "hasTimePeriodQuestions",
+            value: function hasTimePeriodQuestions() {
+                var timePeriodQuestions = DIAGNOSTICS_CONSTANTS.STEPS.SOLUTION_PROPOSAL.TIME_PERIOD_QUESTIONS;
+                return !_.difference(timePeriodQuestions, this.getQuestionsToAnswer()).length;
+            }
+        }, {
+            key: "getQuestionDefaultValue",
+            value: function getQuestionDefaultValue(questionName) {
+                var question = _.find(this.data.toAnswer, "name", questionName);
+                return !_.isUndefined(question) ? question.defaultValue : null;
+            }
+        }, {
+            key: "convertToRequestParams",
+            value: function convertToRequestParams() {
+                var defaultFaultType = DIAGNOSTICS_CONSTANTS.FAULT_TYPES.UNKNOWN;
+                return {
+                    actionsDone: _.get(this.data, "actionsDone"),
+                    answers: _.get(this.data, "answers"),
+                    faultType: this.faultType || defaultFaultType
+                };
+            }
+        }]);
+
+        return LineDiagnostic;
+    }();
+
+    return LineDiagnostic;
+}]);
 
 angular.module("ovh-angular-line-diagnostics").provider("LineDiagnostics", function () {
     "use strict";
@@ -38,9 +467,8 @@ angular.module("ovh-angular-line-diagnostics").provider("LineDiagnostics", funct
         return translationPath;
     };
 
-    this.$get = ["$injector", "Poller", "$translatePartialLoader", "$translate", function ($injector, Poller, $translatePartialLoader, $translate) {
+    this.$get = ["$translatePartialLoader", "$translate", "OvhApiXdslDiagnosticLines", function ($translatePartialLoader, $translate, OvhApiXdslDiagnosticLines) {
         var lineDiagnosticsService = {};
-        var api = $injector.get(requestProxy);
 
         lineDiagnosticsService.loadTranslations = function () {
             angular.forEach([translationPath], function (part) {
@@ -50,8 +478,8 @@ angular.module("ovh-angular-line-diagnostics").provider("LineDiagnostics", funct
             return $translate.refresh();
         };
 
-        lineDiagnosticsService.getSetDiagnostic = function (uriParams, datas) {
-            var syncParam = { faultType: "noSync" };
+        lineDiagnosticsService.getRunDiagnostic = function (uriParams, datas) {
+            var syncParam = { faultType: "unknown" };
             var postParams = datas && datas.faultType ? datas : angular.extend(syncParam, datas || {});
 
             if (postParams && postParams.answers) {
@@ -61,341 +489,31 @@ angular.module("ovh-angular-line-diagnostics").provider("LineDiagnostics", funct
                     }
                 });
             }
-            return api.post(URI.expand([pathPrefix, "lines", "{number}", "diagnostic/run"].join("/"), uriParams).toString(), postParams);
+
+            return OvhApiXdslDiagnosticLines.v6().runDiagnostic(_.merge(uriParams, postParams));
         };
 
-        lineDiagnosticsService.getDeleteDiagnostic = function (uriParams) {
-            return api.post(URI.expand([pathPrefix, "lines", "{number}", "diagnostic/cancel"].join("/"), uriParams).toString());
+        lineDiagnosticsService.getCancelDiagnostic = function (uriParams) {
+            return OvhApiXdslDiagnosticLines.v6().cancelDiagnostic(uriParams, {});
         };
 
-        // lineDiagnosticsService.getDiagnosticPassRobot = function (serviceName, num) {
-        //    return api.post([pathPrefix, 'line', serviceName, 'diagnostic/noSync/passRobot', num].join('/'));
-        // };
-
-        lineDiagnosticsService.getWaitingValidationDiagnostics = function () {
-            var $q = $injector.get("$q");
-            return api.get([pathPrefix, "diagnostic/getWaitingValidationDiagnostics"].join("/")).then(function (result) {
-                return result.data;
-            }, function (err) {
-                return $q.reject(err);
-            });
-        };
-
-        lineDiagnosticsService.pollWaitingValidationDiagnostics = function () {
-            return Poller.poll([pathPrefix, "diagnostic/getWaitingValidationDiagnostics"].join("/"), pollingApiOptions, {
-                namespace: "tools_validation_diagnostics",
-                method: "get",
-                interval: 30000
-            });
-        };
-
-        lineDiagnosticsService.killPollWaitingValidationDiagnostics = function () {
-            Poller.kill({ namespace: "tools_validation_diagnostics" });
-        };
-
-        lineDiagnosticsService.validateDiagnostics = function (id, datas) {
-            var $q = $injector.get("$q");
-            return api.post([pathPrefix, "diagnostic", id, "validate"].join("/"), datas).then(function (result) {
-                return result.data;
-            }, function (err) {
-                return $q.reject(err);
-            });
-        };
-
-        lineDiagnosticsService.runPollGetDiagnostic = function (uriParams, datas) {
-            var syncParam = { faultType: "noSync" };
-            var postParams = datas && datas.faultType ? datas : angular.extend(syncParam, datas || {});
-            return Poller.poll(URI.expand([pathPrefix, "lines", "{number}", "diagnostic/run"].join("/"), uriParams).toString(), pollingApiOptions, {
-                namespace: "tools_line_diagnostics",
-                method: "post",
-                postData: postParams,
-                interval: 5000,
-                successRule: function successRule(data) {
-                    return data.status !== "waitingRobot";
-                } // ,
-                // errorRule : function (data) {
-                //     console.log(data.status !== 'waitingHuman' && !!data.data.error);
-                //     return data.status !== 'waitingHuman' && !!data.data.error; //TODO review that
-                // }
-
-            });
+        lineDiagnosticsService.deletePollDiagnostic = function () {
+            return OvhApiXdslDiagnosticLines.v6().killPollerDiagnostic();
         };
 
         return lineDiagnosticsService;
     }];
 });
 
-angular.module("ovh-angular-line-diagnostics").directive("lineDiagnostics", function () {
-    "use strict";
-
-    return {
-        restrict: "EA",
-        templateUrl: "/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/ovh-angular-line-diagnostics.html",
-        controllerAs: "LinediagnosticsCtrl",
-        bindToController: true,
-        scope: {
-            lineDiagnostics: "@",
-            lineDiagnosticsType: "@",
-            serviceName: "@lineDiagnosticsServiceName"
-        },
-        controller: ["$q", "LineDiagnostics", "Toast", "$translate", "$state", "$scope", function ($q, LineDiagnostics, Toast, $translate, $state, $scope) {
-
-            var self = this;
-
-            self.translateReady = false;
-
-            self.loaders = {
-                getLineStep: false,
-                actionTodo: false,
-                toAnswer: false
-            };
-
-            self.datas = {
-                lineStep: {},
-                lineNumber: self.lineDiagnostics,
-                type: self.lineDiagnosticsType,
-                serviceName: self.serviceName
-            };
-
-            self.formActionTodo = {
-                values: {}, // Load by actionTodo in self.datas.lineStep.data
-                list: [],
-                comment: ""
-            };
-
-            self.formToAnswer = {
-                values: {} // Load by toAnswer in self.datas.lineStep.data.toAnswer
-            };
-
-            // --------URI PARAMS---------
-
-            function getUriParams() {
-                var uriParams = {
-                    number: self.datas.lineNumber
-                };
-
-                if (!_.isUndefined(self.datas.serviceName)) {
-                    uriParams.serviceName = self.datas.serviceName;
-                }
-
-                return uriParams;
-            }
-
-            // --------INIT---------
-
-            function init() {
-                // translations loadings
-                LineDiagnostics.loadTranslations().then(function () {
-                    self.translateReady = true;
-                    getSetLineStep();
-                }, function () {
-                    self.translateReady = null;
-                });
-            }
-
-            function getSetLineStep(paramDatas) {
-                var datas = paramDatas;
-                self.loaders.getLineStep = true;
-                if (self.datas.type) {
-                    datas = datas ? angular.extend(datas, { faultType: self.datas.type }) : { faultType: self.datas.type };
-                }
-                return LineDiagnostics.getSetDiagnostic(getUriParams(), datas).then(function (lineStep) {
-                    if (lineStep.data.errors) {
-                        // if error, interne api return 200 status with lineStep.errors = [] ... winner code check
-                        var errors = lineStep.data.errors;
-                        self.datas.lineStep = null;
-                        var errorMessage = "";
-                        if (errors.length) {
-                            if (errors[0].context && errors[0].context.errorCode) {
-                                self.datas.error = errors[0].context.errorCode;
-                                errorMessage = $translate.instant("tools_lineDiagnostics_error_context_" + errors[0].context.errorCode);
-                            } else {
-                                errorMessage = errors[0].kind + " : " + errors[0].message;
-                            }
-                        }
-                        Toast.error($translate.instant("tools_lineDiagnostics_error", { lineNumber: self.datas.lineNumber }) + " " + errorMessage);
-                        return $q.reject(errors);
-                    }
-                    var errorAllow = ["changeProfileNotDone", "ovhTicketInvalid", "monitoringTodoAlreadyExists"];
-
-                    // case for no error, but user hasn t really make actions asked
-                    if (lineStep.data && lineStep.data.data && lineStep.data.data.error && errorAllow.indexOf(lineStep.data.data.error) !== -1) {
-                        Toast.error($translate.instant("tools_lineDiagnostics_error_context_" + lineStep.data.data.error));
-                    }
-                    self.datas.lineStep = lineStep.data;
-                    runPolling(lineStep.data);
-                    self.formActionTodo.comment = self.datas.lineStep.data.answers.comment;
-                    return lineStep;
-                }, function (error) {
-                    self.datas.lineStep = null;
-                    if (!datas) {
-                        // JEAN MICHEL style for no error code on apiv6
-                        var errorMessage = "";
-                        var errorCode = null;
-                        var errorMessageCode = error.data && error.data.message || ""; // errors from apiv6 without mesage cogde
-                        if (errorMessageCode === "line diagnostic already launched by OVH") {
-                            errorCode = "internalDiagAlreadyLaunched";
-                            errorMessage = " " + $translate.instant("tools_lineDiagnostics_error_context_" + errorCode);
-                        }
-
-                        // END JEAN MICHEL style for no error code on apiv6
-                        Toast.error($translate.instant("tools_lineDiagnostics_error", { lineNumber: self.datas.lineNumber }) + errorMessage);
-                        self.datas.error = errorCode;
-                    }
-                    return $q.reject(error);
-                }).finally(function () {
-                    self.loaders.getLineStep = false;
-                });
-            }
-
-            function runPolling(lineStep) {
-                if (lineStep.status === "waitingRobot") {
-                    LineDiagnostics.runPollGetDiagnostic(getUriParams(), self.datas.type ? { faultType: self.datas.type } : undefined).then(function (lineStepParam) {
-                        self.datas.lineStep = lineStepParam;
-                    });
-                }
-            }
-
-            // --------TOOLS---------
-
-            self.isNotEmptyObj = function (obj) {
-                return obj && Object.keys(obj).length > 0;
-            };
-
-            self.displayDoneTitle = function (answers) {
-                return !!_.find(answers, function (answer, key) {
-                    return answers[key] !== null;
-                });
-            };
-
-            $scope.$watch(function () {
-                return self.formActionTodo;
-            }, function () {
-                self.formActionTodo.list = Object.keys(_.omit(self.formActionTodo.values, function (isChecked) {
-                    return !isChecked;
-                }));
-            }, true);
-
-            function responseHandling(response) {
-                if (!response || !response.data || !!response.data.error) {
-                    Toast.error($translate.instant("tools_lineDiagnostics_post_error", { lineNumber: self.datas.lineNumber }) + " : " + (response && response.data && response.data.error || ""));
-                }
-            }
-
-            // --------ACTIONS---------
-
-            self.hasComment = function () {
-                return !!_.find(self.datas.lineStep.data.toAnswer, { name: "comment" });
-            };
-
-            self.dateChanged = function (object, name) {
-                // check if date and time are set
-                if (!object[name + "date"] && !object[name + "time"]) {
-                    object[name] = undefined;
-                    return;
-                }
-
-                // set objectName data with two part date
-                var inputDate = object[name + "date"] || moment().format("YYYY-MM-DD");
-                var inputTime = (object[name + "time"] || "00:00") + ":00";
-                object[name] = moment(inputDate, "YYYY-MM-DD").format("YYYY-MM-DD") + "T" + inputTime + moment().format("Z");
-            };
-
-            self.setSearchDate = function (object, name, nbDays) {
-                // preselected date changed
-                var date = null;
-                if (nbDays === -30) {
-                    date = moment().add(-1, "months");
-                    object[name + "date"] = date.format("YYYY-MM-DD");
-                } else {
-                    date = moment().add(nbDays, "days");
-                    object[name + "date"] = date.format("YYYY-MM-DD");
-                }
-                if (!object[name + "time"]) {
-                    object[name + "time"] = date.format("HH:mm");
-                }
-                self.dateChanged(object, name);
-            };
-
-            self.refreshLineStep = function () {
-                if (!self.loaders.getLineStep) {
-                    getSetLineStep();
-                }
-            };
-
-            self.submitActionTodo = function () {
-                self.loaders.actionTodo = true;
-
-                var comment = self.formActionTodo.comment ? {
-                    answers: {
-                        comment: self.formActionTodo.comment
-                    }
-                } : {};
-
-                getSetLineStep(angular.extend({
-                    actionsDone: self.formActionTodo.list
-                }, comment)).then(responseHandling, function () {
-                    Toast.error($translate.instant("tools_lineDiagnostics_post_error", { lineNumber: self.datas.lineNumber }));
-                }).finally(function () {
-                    self.loaders.actionTodo = false;
-                });
-            };
-
-            self.conditionRefused = function () {
-                return self.formToAnswer.values.conditionsAccepted !== undefined && self.formToAnswer.values.conditionsAccepted === "false";
-            };
-
-            self.submitToAnswer = function () {
-                self.loaders.toAnswer = true;
-
-                if (!self.hasComment()) {
-                    self.formToAnswer.values.comment = angular.copy(self.formActionTodo.comment);
-                }
-                if (self.formToAnswer.values.ovhTicket) {
-                    self.formToAnswer.values.ovhTicket = parseInt(self.formToAnswer.values.ovhTicket, 10);
-                }
-                if (self.formToAnswer.values.datetimeOfAppearancedate) {
-                    delete self.formToAnswer.values.datetimeOfAppearancedate;
-                }
-                if (self.formToAnswer.values.datetimeOfAppearancetime) {
-                    delete self.formToAnswer.values.datetimeOfAppearancetime;
-                }
-
-                getSetLineStep({
-                    answers: self.formToAnswer.values
-                }).then(responseHandling, function () {
-                    Toast.error($translate.instant("tools_lineDiagnostics_post_error", { lineNumber: self.datas.lineNumber }));
-                }).finally(function () {
-                    self.loaders.toAnswer = false;
-                });
-            };
-
-            self.deleteDiag = function () {
-                LineDiagnostics.getDeleteDiagnostic(getUriParams()).then(function () {
-                    $state.reload();
-                });
-            };
-
-            // --------DEBUG---------
-
-            /* self.bypassRobot = function (num) {
-            LineDiagnostics.getDiagnosticPassRobot(self.datas.lineNumber, num);
-            };
-            self.deleteDiag = function () {
-            LineDiagnostics.getDeleteDiagnostic(self.datas.lineNumber).then(function () {
-                $state.reload();
-            });
-            };*/
-
-            init();
-        }]
-
-    };
-});
-
 angular.module('ovh-angular-line-diagnostics').run(['$templateCache', function ($templateCache) {
     'use strict';
 
-    $templateCache.put('/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/ovh-angular-line-diagnostics.html', "<div id=line-diagnostics data-ng-if=\"LinediagnosticsCtrl.translateReady === false || LinediagnosticsCtrl.loaders.getLineStep === true\"><div class=text-center><spinner></spinner></div></div><div id=line-diagnostics data-ng-if=\"LinediagnosticsCtrl.translateReady === null\"><div class=text-center>LOADING ERROR</div></div><div id=line-diagnostics data-ng-if=\"LinediagnosticsCtrl.translateReady === true && LinediagnosticsCtrl.loaders.getLineStep === false\"><h1>{{'tools_lineDiagnostics_title' | translate}}</h1><div class=\"alert alert-danger top-space-m20 text-center\" role=alert data-ng-if=\"LinediagnosticsCtrl.datas.lineStep === null\"><p><i class=\"ovh-font ovh-font-failure right-space-m8\"></i> <span data-translate=tools_lineDiagnostics_error data-translate-values=\"{lineNumber : LinediagnosticsCtrl.datas.lineNumber}\"></span><div data-ng-if=LinediagnosticsCtrl.datas.error><span data-translate=\"{{('tools_lineDiagnostics_error_context_' + LinediagnosticsCtrl.datas.error | translate) || '' }}\"></span></div></p><button data-ng-click=LinediagnosticsCtrl.refreshLineStep(); data-ng-disabled=LinediagnosticsCtrl.loaders.getLineStep type=button class=\"btn btn-default top-space-m12\" title=\"{{::'support_ticket_refresh' | translate}}\"><i data-ng-hide=LinediagnosticsCtrl.loaders.getLineStep class=\"fa fa-refresh\"></i><spinner data-ng-show=LinediagnosticsCtrl.loaders.getLineStep></spinner><span data-translate=tools_lineDiagnostics_refresh></span></button></div><div data-ng-if=\"LinediagnosticsCtrl.datas.lineStep !== null\"><div class=line-diagnostics-detail data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.data.seltTest.status && (!LinediagnosticsCtrl.datas.type || LinediagnosticsCtrl.datas.type==='noSync')\"><h2 data-translate=tools_lineDiagnostics_testselt_title></h2><div class=bottom-space-m16 data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.data.seltTest.status === 'failed'\"><i class=\"ovh-font ovh-font-failure fs16 text-danger\"></i> <span data-translate=tools_lineDiagnostics_testselt_error></span></div><div class=bottom-space-m16 data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.data.seltTest.status !== 'failed'\"><i class=\"ovh-font ovh-font-success fs16 text-success\"></i> <span data-translate=tools_lineDiagnostics_testselt_status></span></div><div class=row data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.data.seltTest.status !== 'failed'\"><p class=\"col-xs-12 col-md-3 bodyText2\" data-translate=tools_lineDiagnostics_testselt_date></p><p class=\"col-xs-12 col-md-9\" data-ng-bind=\"LinediagnosticsCtrl.datas.lineStep.data.seltTest.date || '-'\"></p></div><div class=row><p class=\"col-xs-12 col-md-3 bodyText2\" data-translate=tools_lineDiagnostics_detail_lastSync></p><p class=\"col-xs-12 col-md-9\" data-ng-bind=\"LinediagnosticsCtrl.datas.lineStep.data.lineDetails.lastSync || '-'\"></p></div><div class=row><div class=\"col-xs-12 LineScheme\"><div class=infosNRA><dl><i class=\"ovh-font ovh-font-nra\"></i><dt class=bodyText2 data-translate=tools_lineDiagnostics_detail_NRAName></dt><dd data-ng-bind=\"LinediagnosticsCtrl.datas.lineStep.data.lineDetails.nra || '-'\"></dd><dt class=bodyText2 data-translate=tools_lineDiagnostics_detail_operator></dt><dd data-ng-bind=\"LinediagnosticsCtrl.datas.lineStep.data.lineDetails.operator || '-'\"></dd></dl></div><div class=infosClientSide><dl><dt class=sr-only data-translate=tools_lineDiagnostics_detail_accessType></dt><dd data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.data.lineDetails.lineType==='sdsl'\"><i title={{::LinediagnosticsCtrl.datas.lineStep.data.lineDetails.lineType}} class=\"ovh-font ovh-font-telecom-sdsl\"></i></dd><dd data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.data.lineDetails.lineType==='adsl'\"><i title={{::LinediagnosticsCtrl.datas.lineStep.data.lineDetails.lineType}} class=\"ovh-font ovh-font-xdsl-adsl\"></i></dd><dd data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.data.lineDetails.lineType==='vdsl'\"><i title={{::LinediagnosticsCtrl.datas.lineStep.data.lineDetails.lineType}} class=\"ovh-font ovh-font-xdsl-vdsl\"></i></dd><dt class=bodyText2 data-translate=tools_lineDiagnostics_detail_accessName></dt><dd data-ng-bind=\"LinediagnosticsCtrl.datas.lineStep.data.lineDetails.accessName || '-'\"></dd><dt class=bodyText2 data-translate=tools_lineDiagnostics_detail_address></dt><dd data-ng-bind=\"LinediagnosticsCtrl.datas.lineStep.data.lineDetails.address || '-'\"></dd></dl></div><div class=linePart><div class=lineDistances><div class=lineLength><div class=arrowPart></div><dl><dt class=sr-only data-translate=tools_lineDiagnostics_detail_NRADistance></dt><dd data-ng-bind=\"LinediagnosticsCtrl.datas.lineStep.data.lineDetails.length ? LinediagnosticsCtrl.datas.lineStep.data.lineDetails.length + 'm' : '-'\"></dd></dl><div class=arrowPart></div></div><div class=distanceIndicators></div></div><div class=locPb data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.data.seltTest.status !== 'failed'\"><div class=locPbContainer><div class=pbIcon><i class=\"ovh-font ovh-font-failure fs20 text-danger\"></i></div><div class=\"problemDescription left-space-p12\"><h3>{{'tools_lineDiagnostics_testselt_state_' + LinediagnosticsCtrl.datas.lineStep.data.seltTest.state | translate}} {{' tools_lineDiagnostics_testselt_preloc_' + LinediagnosticsCtrl.datas.lineStep.data.seltTest.preloc | translate}}</h3><p><span class=bodyText2 data-translate=tools_lineDiagnostics_testselt_distance></span> : <span data-ng-bind=\"LinediagnosticsCtrl.datas.lineStep.data.seltTest.distance ? LinediagnosticsCtrl.datas.lineStep.data.seltTest.distance + 'm' : '-'\"></span></p></div></div></div></div></div></div></div><div data-ng-if=LinediagnosticsCtrl.datas.lineStep.data.actionsDone.length><h2 data-translate=tools_lineDiagnostics_actionDone_title></h2><div class=line-diagnostics-detail><ul class=list-unstyled><li class=bottom-space-m12 data-ng-repeat=\"actionsDone in LinediagnosticsCtrl.datas.lineStep.data.actionsDone\"><i class=\"ovh-font ovh-font-success fs16 text-success\"></i> <span class=left-space-p8>{{::'tools_lineDiagnostics_action_' + actionsDone | translate}}</span></li></ul></div></div><div data-ng-if=\"LinediagnosticsCtrl.isNotEmptyObj(LinediagnosticsCtrl.datas.lineStep.data.answers) && LinediagnosticsCtrl.displayDoneTitle(LinediagnosticsCtrl.datas.lineStep.data.answers)\"><h2 data-translate=tools_lineDiagnostics_answers_title></h2><div class=line-diagnostics-detail><div class=\"form-horizontal full-height\"><div class=form-group data-ng-repeat=\"(key, answers) in LinediagnosticsCtrl.datas.lineStep.data.answers\" data-ng-if=\"answers!==null\"><label class=\"col-xs-12 col-md-6 bodyText2 top-space-p0\">{{::'tools_lineDiagnostics_answers_' + key | translate}}</label><div class=\"col-xs-12 col-md-6\"><span data-ng-if=\"key!=='comment'\" data-ng-bind=\"(answers ? 'tools_lineDiagnostics_detail_yes' : 'tools_lineDiagnostics_detail_no') | translate\"></span> <span data-ng-if=\"key==='comment'\" data-ng-bind=\"answers ? answers : ('tools_lineDiagnostics_detail_no' | translate)\"></span></div></div></div></div></div><div class=rightPanel data-ng-if=LinediagnosticsCtrl.datas.lineStep.data.actionsToDo.length><h2 data-translate=tools_lineDiagnostics_todo_title></h2><div class=line-diagnostics-detail><form class=\"full-height clearfix\" name=formActionTodo novalidate><div class=checkbox data-ng-repeat=\"actionTodo in LinediagnosticsCtrl.datas.lineStep.data.actionsToDo\"><label><input type=checkbox data-ng-required=true data-ng-model=LinediagnosticsCtrl.formActionTodo.values[actionTodo.name]> {{::'tools_lineDiagnostics_action_' + actionTodo.name | translate}}</label></div><div class=\"form-group comment\"><label for=formActionTodo_comment class=control-label>{{::'tools_lineDiagnostics_toanswer_comment' | translate}}</label><div><textarea id=formActionTodo_comment name=formActionTodo_comment class=\"form-control vertical-resize\" ng-maxlength=200 rows=\"{{ !!toAnswer.defaultValue ? 1 : 5}}\" data-ng-model=LinediagnosticsCtrl.formActionTodo.comment></textarea></div></div><button type=button class=\"btn btn-default\" data-ng-click=LinediagnosticsCtrl.deleteDiag()><span data-translate=tools_lineDiagnostics_delete_button></span></button> <button type=button class=\"btn btn-primary pull-right\" data-ng-disabled=formActionTodo.$invalid data-ng-click=LinediagnosticsCtrl.submitActionTodo()><spinner data-ng-show=LinediagnosticsCtrl.loaders.actionTodo></spinner><span data-translate=tools_lineDiagnostics_next_button></span></button></form></div></div><div class=rightPanel data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.data.toAnswer.length && LinediagnosticsCtrl.datas.lineStep.status === 'waitingHuman'\"><h2 data-translate=tools_lineDiagnostics_toanswer_title></h2><div class=line-diagnostics-detail><form class=\"full-height clearfix\" name=formToAnswer novalidate><div data-ng-repeat=\"toAnswer in LinediagnosticsCtrl.datas.lineStep.data.toAnswer\"><div class=form-group data-ng-if=\"toAnswer.type==='boolean'\"><div data-ng-if=\"toAnswer.name==='conditionsAccepted'\" class=inline style=margin-right:5px><label class=\"block pointer\"><flat-checkbox><input type=checkbox data-ng-model=LinediagnosticsCtrl.formToAnswer.values[toAnswer.name] name=\"checkbox{{ toAnswer.name}}\" id=\"checkbox{{ toAnswer.name }}\" ng-required=\"toAnswer.required\"></flat-checkbox><span class=left-space-m8>{{::'tools_lineDiagnostics_toanswer_' + toAnswer.name | translate}} <span class=red data-ng-if=toAnswer.required>*</span></span></label></div><p data-ng-if=\"toAnswer.name!=='conditionsAccepted'\">{{::'tools_lineDiagnostics_toanswer_' + toAnswer.name | translate}} <span class=red data-ng-if=toAnswer.required>*</span></p><div data-ng-if=\"toAnswer.name!=='conditionsAccepted'\" class=row><div class=col-xs-6><label><flat-radio class=pointer><input value=true type=radio ng-model=LinediagnosticsCtrl.formToAnswer.values[toAnswer.name] ng-required=toAnswer.required></flat-radio><span class=left-space-m12 data-translate=tools_lineDiagnostics_detail_yes></span></label></div><div class=col-xs-6><label><flat-radio class=pointer><input value=false type=radio ng-model=LinediagnosticsCtrl.formToAnswer.values[toAnswer.name] ng-required=toAnswer.required></flat-radio><span class=left-space-m12 data-translate=tools_lineDiagnostics_detail_no></span></label></div></div></div><div class=form-group data-ng-if=\"toAnswer.type==='string'\" data-ng-init=\"LinediagnosticsCtrl.formToAnswer.values[toAnswer.name] = toAnswer.defaultValue || '' \"><label for=formToAnswer_{{toAnswer.name}} class=control-label>{{::'tools_lineDiagnostics_toanswer_' + toAnswer.name | translate}} <span class=red data-ng-if=toAnswer.required>*</span></label><div><textarea id=formToAnswer_{{::toAnswer.name}} name=formToAnswer_{{::toAnswer.name}} class=\"form-control vertical-resize\" rows=\"{{ !!toAnswer.defaultValue ? 1 : 5}}\" data-ng-required=toAnswer.required data-ng-pattern=toAnswer.pattern data-ng-model=LinediagnosticsCtrl.formToAnswer.values[toAnswer.name]></textarea></div></div><div class=form-group data-ng-if=\"toAnswer.type==='long'\" data-ng-init=\"LinediagnosticsCtrl.formToAnswer.values[toAnswer.name] = toAnswer.defaultValue || '' \"><label for=formToAnswer_{{toAnswer.name}} class=control-label>{{::'tools_lineDiagnostics_toanswer_' + toAnswer.name | translate}} <span class=red data-ng-if=toAnswer.required>*</span></label><div><input pattern=[0-9]{1,8} id=formToAnswer_{{::toAnswer.name}} name=formToAnswer_{{::toAnswer.name}} data-ng-required=toAnswer.required data-ng-model=LinediagnosticsCtrl.formToAnswer.values[toAnswer.name]></div></div><div class=form-group data-ng-if=\"toAnswer.type==='enum'\" data-ng-init=\"LinediagnosticsCtrl.formToAnswer.values[toAnswer.name] = toAnswer.defaultValue || '' \"><label for=formToAnswer_{{toAnswer.name}} class=control-label>{{::'tools_lineDiagnostics_toanswer_' + toAnswer.name | translate}} <span class=red data-ng-if=toAnswer.required>*</span></label><div><select id=formToAnswer_{{::toAnswer.name}} name=formToAnswer_{{::toAnswer.name}} class=\"form-control no-space\" data-ng-options=\" ('tools_lineDiagnostics_toanswer_' + toAnswer.name + '_enum_' + value | translate ) for value in toAnswer.enumValues\" data-ng-required=toAnswer.required data-ng-model=LinediagnosticsCtrl.formToAnswer.values[toAnswer.name]><option data-ng-if=!toAnswer.required value=\"\"></option></select></div></div><div class=form-group data-ng-if=\"toAnswer.type==='datetime'\" data-ng-init=\"LinediagnosticsCtrl.formToAnswer.values[toAnswer.name] = toAnswer.defaultValue || '' \"><div class=row><div class=col-sm-12><label for=formToAnswer_{{toAnswer.name}}_date class=control-label>{{::'tools_lineDiagnostics_toanswer_' + toAnswer.name | translate}} <span class=red data-ng-if=toAnswer.required>*</span></label></div><div class=col-sm-7><div class=input-group><div class=input-group-btn><div class=btn-group data-uib-dropdown is-open=datepick.isopen><button id=datepick_choices type=button class=\"btn btn-default btn-sm\" data-uib-dropdown-toggle><i class=\"fa fa-calendar-o\"></i></button><ul data-uib-dropdown-menu><li role=menuitem><button class=\"full-width no-style text-left\" type=button data-ng-click=\"LinediagnosticsCtrl.setSearchDate(LinediagnosticsCtrl.formToAnswer.values, toAnswer.name, 0); datepick.isopen=false;\" data-translate=tools_lineDiagnostics_date_now></button></li><li role=menuitem><button class=\"full-width no-style text-left\" type=button data-ng-click=\"LinediagnosticsCtrl.setSearchDate(LinediagnosticsCtrl.formToAnswer.values, toAnswer.name, -1); datepick.isopen=false;\" data-translate=tools_lineDiagnostics_date_yesterday></button></li><li role=menuitem><button class=\"full-width no-style text-left\" type=button data-ng-click=\"LinediagnosticsCtrl.setSearchDate(LinediagnosticsCtrl.formToAnswer.values, toAnswer.name, -3); datepick.isopen=false;\" data-translate=tools_lineDiagnostics_date_3d></button></li><li role=menuitem><button class=\"full-width no-style text-left\" type=button data-ng-click=\"LinediagnosticsCtrl.setSearchDate(LinediagnosticsCtrl.formToAnswer.values, toAnswer.name, -7); datepick.isopen=false;\" data-translate=tools_lineDiagnostics_date_1w></button></li><li role=menuitem><button class=\"full-width no-style text-left\" type=button data-ng-click=\"LinediagnosticsCtrl.setSearchDate(LinediagnosticsCtrl.formToAnswer.values, toAnswer.name, -30); datepick.isopen=false;\" data-translate=tools_lineDiagnostics_date_1m></button></li></ul></div></div><input class=form-control id=formToAnswer_{{toAnswer.name}}_date placeholder=YYYY-MM-DD pattern=[0-9]{4}-[0-9]{2}-[0-9]{2} data-ng-change=\"LinediagnosticsCtrl.dateChanged(LinediagnosticsCtrl.formToAnswer.values, toAnswer.name)\" data-ng-model=\"LinediagnosticsCtrl.formToAnswer.values[toAnswer.name+'date']\" data-ng-required=toAnswer.required> <span class=input-group-btn data-ng-show=\"!!LinediagnosticsCtrl.formToAnswer.values[toAnswer.name+'date']\"><button class=\"btn btn-default btn-sm\" type=button data-ng-click=\"LinediagnosticsCtrl.formToAnswer.values[toAnswer.name+'date']=null;\"><i class=\"fa fa-times\"></i></button></span></div></div><div class=col-sm-5><div class=input-group><input class=form-control placeholder=HH:mm pattern=[0-9]{2}:[0-9]{2} id=formToAnswer_{{::toAnswer.name}} name=formToAnswer_{{::toAnswer.name}} data-ng-required=toAnswer.required data-ng-change=\"LinediagnosticsCtrl.dateChanged(LinediagnosticsCtrl.formToAnswer.values, toAnswer.name)\" data-ng-model=\"LinediagnosticsCtrl.formToAnswer.values[toAnswer.name+'time']\"><span class=input-group-btn data-ng-show=\"!!LinediagnosticsCtrl.formToAnswer.values[toAnswer.name+'time']\"><button class=\"btn btn-default btn-sm\" type=button data-ng-click=\"LinediagnosticsCtrl.formToAnswer.values[toAnswer.name+'time']=null;\"><i class=\"fa fa-times\"></i></button></span></div></div></div></div><div class=form-group data-ng-if=toAnswer.possibleValues.length><label for=formToAnswer_{{toAnswer.name}} class=control-label>{{::'tools_lineDiagnostics_toanswer_' + toAnswer.name | translate}} <span class=red data-ng-if=toAnswer.required>*</span></label><div><select id=formToAnswer_{{::toAnswer.name}} name=formToAnswer_{{::toAnswer.name}} class=\"form-control no-space\" data-ng-options=\"value.id as value.label for value in toAnswer.possibleValues\" data-ng-required=toAnswer.required data-ng-model=LinediagnosticsCtrl.formToAnswer.values[toAnswer.name]><option data-ng-if=!toAnswer.required value=\"\"></option></select></div></div></div><div data-ng-if=!LinediagnosticsCtrl.hasComment()><div class=form-group><label for=formActionTodo_comment class=control-label>{{::'tools_lineDiagnostics_toanswer_comment' | translate}}</label><div><textarea id=formActionTodo_comment name=formActionTodo_comment class=\"form-control vertical-resize\" rows=\"{{ !!toAnswer.defaultValue ? 1 : 5}}\" data-ng-model=LinediagnosticsCtrl.formActionTodo.comment></textarea></div></div></div><button type=button class=\"btn btn-default\" data-ng-click=LinediagnosticsCtrl.deleteDiag() data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status !== 'problem'\"><span data-translate=tools_lineDiagnostics_delete_button></span></button> <button type=button class=\"btn btn-primary pull-right\" data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status !== 'problem'\" data-ng-disabled=\"formToAnswer.$invalid || LinediagnosticsCtrl.conditionRefused()\" data-ng-click=LinediagnosticsCtrl.submitToAnswer()><spinner data-ng-show=LinediagnosticsCtrl.loaders.toAnswer></spinner><span data-translate=tools_lineDiagnostics_next_button></span></button></form></div></div><div class=line-diagnostics-detail data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status !== 'waitingHuman'\"><div class=\"alert text-center\" data-ng-class=\"{\n" + "                    'alert-info' : LinediagnosticsCtrl.datas.lineStep.status === 'waitingRobot'\n" + "                                || LinediagnosticsCtrl.datas.lineStep.status === 'sleeping'\n" + "                                || LinediagnosticsCtrl.datas.lineStep.status === 'waitingValidation'\n" + "                                || LinediagnosticsCtrl.datas.lineStep.status === 'cancelled'\n" + "                                || LinediagnosticsCtrl.datas.lineStep.status === 'haveToConnectModemOnTheRightPlug'\n" + "                                || LinediagnosticsCtrl.datas.lineStep.status === 'noSyncFaultDiagnosticRequired'\n" + "                                || LinediagnosticsCtrl.datas.lineStep.status === 'connectionProblem',\n" + "\n" + "                    'alert-danger' : LinediagnosticsCtrl.datas.lineStep.status === 'problem'\n" + "                                || LinediagnosticsCtrl.datas.lineStep.status === 'validationRefused',\n" + "\n" + "                    'alert-success' : LinediagnosticsCtrl.datas.lineStep.status === 'resolvedAfterTests'\n" + "                                || LinediagnosticsCtrl.datas.lineStep.status === 'interventionRequested'\n" + "                                || LinediagnosticsCtrl.datas.lineStep.status === 'noBandwidthFault'\n" + "                                || LinediagnosticsCtrl.datas.lineStep.status === 'noProblemAnymore'\n" + "                }\" role=alert><p><i data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status === 'waitingRobot'\n" + "                        || LinediagnosticsCtrl.datas.lineStep.status === 'sleeping'\n" + "                        || LinediagnosticsCtrl.datas.lineStep.status === 'waitingValidation'\" class=\"ovh-font ovh-font-inprogress right-space-m8\"></i> <i data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status === 'validationRefused'\" class=\"ovh-font ovh-font-failure\"></i> <i data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status === 'cancelled'\" class=\"ovh-font ovh-font-failure\"></i> <i data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status === 'problem'\" class=\"ovh-font ovh-font-warning\"></i> <i data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status === 'resolvedAfterTests'\n" + "                        || LinediagnosticsCtrl.datas.lineStep.status === 'interventionRequested'\" class=\"ovh-font ovh-font-success\"></i> <span data-translate=tools_lineDiagnostics_robot_{{LinediagnosticsCtrl.datas.lineStep.status}}></span> <span data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status === 'problem' &&\n" + "                        LinediagnosticsCtrl.datas.lineStep.data.error && LinediagnosticsCtrl.datas.lineStep.data.ovhTicket\" data-translate=tools_lineDiagnostics_robot_problem_ticket data-translate-values=\"{ovhTicket : LinediagnosticsCtrl.datas.lineStep.data.ovhTicket}\"></span><div data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status==='interventionRequested' &&\n" + "                        LinediagnosticsCtrl.datas.lineStep.data.ovhTicket\"><span class=bold data-translate=tools_lineDiagnostics_robot_interventionRequested_otrsticket data-translate-values=\"{ovhTicket : LinediagnosticsCtrl.datas.lineStep.data.ovhTicket}\"></span></div><div data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status==='interventionRequested' &&\n" + "                        LinediagnosticsCtrl.datas.lineStep.data.operatorTicketId\"><span class=bold data-translate=tools_lineDiagnostics_robot_interventionRequested_operatorticketid data-translate-values=\"{operatorTicketId : LinediagnosticsCtrl.datas.lineStep.data.operatorTicketId}\"></span></div><div data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status==='interventionRequested' &&\n" + "                        LinediagnosticsCtrl.datas.lineStep.data.ovhInterventionId\"><span class=bold data-translate=tools_lineDiagnostics_robot_interventionRequested_ovhinterventionid data-translate-values=\"{ovhInterventionId : LinediagnosticsCtrl.datas.lineStep.data.ovhInterventionId}\"></span></div><span data-ng-if=!!LinediagnosticsCtrl.datas.lineStep.data.robotAction>({{'tools_lineDiagnostics_robotAction_' + LinediagnosticsCtrl.datas.lineStep.data.robotAction | translate}})</span></p></div><button type=button class=\"btn btn-default\" data-ng-if=\"LinediagnosticsCtrl.datas.lineStep.status === 'problem'\n" + "                    || LinediagnosticsCtrl.datas.lineStep.status === 'validationRefused'\n" + "                    || LinediagnosticsCtrl.datas.lineStep.status === 'resolvedAfterTests'\n" + "                    || LinediagnosticsCtrl.datas.lineStep.status === 'interventionRequested'\n" + "                    || LinediagnosticsCtrl.datas.lineStep.status === 'haveToConnectModemOnTheRightPlug'\n" + "                    || LinediagnosticsCtrl.datas.lineStep.status === 'noSyncFaultDiagnosticRequired'\n" + "                    || LinediagnosticsCtrl.datas.lineStep.status === 'connectionProblem'\n" + "                    || LinediagnosticsCtrl.datas.lineStep.data.isInternal\" data-ng-click=LinediagnosticsCtrl.deleteDiag()><span data-translate=tools_lineDiagnostics_delete_button></span></button></div></div></div>");
+    $templateCache.put('/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/ovh-angular-line-diagnostics.html', "<div class=row><div class=col-md-6><div class=oui-progress-tracker><ol class=oui-progress-tracker__steps><li class=oui-progress-tracker__step data-ng-class=\"{\n" + "                        'oui-progress-tracker__step_active': $ctrl.currentStep === 'detectionStep',\n" + "                        'oui-progress-tracker__step_complete': $ctrl.currentStep !== 'detectionStep'\n" + "                    }\"><span class=oui-progress-tracker__status><span class=oui-progress-tracker__label data-translate=tools_lineDiagnostics_detection_step></span></span></li><li class=oui-progress-tracker__step data-ng-class=\"{\n" + "                        'oui-progress-tracker__step_active': $ctrl.currentStep === 'investigationStep',\n" + "                        'oui-progress-tracker__step_complete': $ctrl.currentStep === 'solutionProposalStep',\n" + "                        'oui-progress-tracker__step_disabled': $ctrl.currentStep === 'detectionStep'\n" + "                    }\"><span class=oui-progress-tracker__status><span class=oui-progress-tracker__label data-translate=tools_lineDiagnostics_investigation_step></span></span></li><li class=oui-progress-tracker__step data-ng-class=\"{\n" + "                        'oui-progress-tracker__step_active': $ctrl.currentStep === 'solutionProposalStep' && !$ctrl.isDiagnosticComplete(),\n" + "                        'oui-progress-tracker__step_complete': $ctrl.isDiagnosticComplete(),\n" + "                        'oui-progress-tracker__step_disabled': $ctrl.currentStep !== 'solutionProposalStep'\n" + "                    }\"><span class=oui-progress-tracker__status><span class=oui-progress-tracker__label data-translate=tools_lineDiagnostics_solution_proposal_step></span></span></li></ol></div></div></div><div class=row><toast-message></toast-message></div><div class=row data-ng-if=\"$ctrl.currentLineDiagnostic.status !== 'problem' || $ctrl.isMonitoringAlreadyExists()\"><div data-ng-if=\"$ctrl.currentStep === 'detectionStep'\" data-ng-include=\"'/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/steps/ovh-angular-line-diagnostics-detection-step.html'\"></div><div data-ng-if=\"$ctrl.currentStep === 'investigationStep'\" data-ng-include=\"'/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/steps/ovh-angular-line-diagnostics-investigation-step.html'\"></div><div data-ng-if=\"$ctrl.currentStep === 'solutionProposalStep'\" data-ng-include=\"'/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/steps/ovh-angular-line-diagnostics-solution-proposal-step.html'\"></div></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'problem' && !$ctrl.isMonitoringAlreadyExists()\"><oui-message data-type=error><p data-translate=tools_lineDiagnostics_diagnostic_critical_problem_title></p><p data-translate=tools_lineDiagnostics_diagnostic_critical_problem></p></oui-message></div>");
+
+    $templateCache.put('/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/steps/ovh-angular-line-diagnostics-detection-step.html', "<div class=col-md-8 data-ng-if=\"$ctrl.detectionStepProgression < 100\"><span data-translate=tools_lineDiagnostics_detection_step_test></span><oui-progress><oui-progress-bar data-type=info data-value=$ctrl.detectionStepProgression></oui-progress-bar></oui-progress></div><div class=col-md-4 data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'waitingRobot'\"><oui-spinner data-size=s></oui-spinner><span data-translate=tools_lineDiagnostics_waitingRobot></span> <span data-translate=tools_lineDiagnostics_please_wait></span></div><div class=col-md-8 data-ng-if=\"$ctrl.detectionStepProgression === 100 &&\n" + "                 $ctrl.currentLineDiagnostic\"><div data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('modemIsSynchronized')\"><form class=form-group novalidate><oui-field data-label=\"{{:: 'tools_lineDiagnostics_detection_step_modem_question' | translate }}\" data-label-popover=\"{{:: 'tools_lineDiagnostics_detection_step_modem_question_help' | translate }}\"><oui-radio-toggle-group class=d-inline-block data-model=$ctrl.currentLineDiagnostic.data.answers.modemIsSynchronized data-on-change=$ctrl.startPoller() data-ng-if=!$ctrl.loading><oui-radio data-value=true><span data-translate=tools_lineDiagnostics_detail_yes></span></oui-radio><oui-radio data-value=false><span data-translate=tools_lineDiagnostics_detail_no></span></oui-radio></oui-radio-toggle-group><p data-ng-if=$ctrl.loading><oui-spinner data-size=s></oui-spinner><span class=ml-2 data-translate=tools_lineDiagnostics_please_wait></span></p></oui-field></form></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.faultType !== 'unknown' &&\n" + "                     $ctrl.currentLineDiagnostic.status !== 'waitingRobot'\"><oui-message data-type=warning><p class=oui-header_5 data-translate=tools_lineDiagnostics_detection_step_warning_title></p><p data-translate=tools_lineDiagnostics_detection_step_warning></p></oui-message><div data-ng-if=\"$ctrl.currentLineDiagnostic.faultType === 'noSync'\"><label for=unplugModem class=oui-label><span data-translate=tools_lineDiagnostics_detection_step_modem_unplug_request></span></label><oui-button id=unplugModem data-variant=secondary data-variant-nav=next data-on-click=\"$ctrl.setModemUnplug('unplugModem')\" data-ng-if=!$ctrl.loading><span data-translate=tools_lineDiagnostics_detection_step_modem_unplug_confirm></span></oui-button><span data-ng-if=$ctrl.loading><oui-spinner data-size=s></oui-spinner><span class=ml-2 data-translate=tools_lineDiagnostics_please_wait></span></span></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.faultType === 'alignment' ||\n" + "                         $ctrl.currentLineDiagnostic.faultType === 'syncLossOrLowBandwidth'\"><oui-button data-variant=secondary data-variant-nav=next data-on-click=$ctrl.goToInvestigationStep() data-ng-if=!$ctrl.loading><span data-translate=tools_lineDiagnostics_detection_step_continue></span></oui-button><span data-ng-if=$ctrl.loading><oui-spinner data-ng-if=$ctrl.loading data-size=s></oui-spinner><span class=ml-2 data-translate=tools_lineDiagnostics_please_wait></span></span></div></div></div>");
+
+    $templateCache.put('/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/steps/ovh-angular-line-diagnostics-investigation-step.html', "<div class=col-md-6 data-ng-if=\"!$ctrl.currentLineDiagnostic.isLongActionInProgress() && $ctrl.currentLineDiagnostic.status !== 'waitingRobot'\"><div class=form-group><p class=oui-header_5 data-translate=tools_lineDiagnostics_header_investigation_step_title></p><p data-translate=tools_lineDiagnostics_header_investigation_step_subtitle></p><div class=mb-5 data-ng-if=\"$ctrl.currentLineDiagnostic.data.actionsDone && $ctrl.currentLineDiagnostic.data.actionsDone.length > 0\"><p data-ng-repeat=\"actionDone in $ctrl.currentLineDiagnostic.getActionsDone() track by actionDone\"><span class=\"oui-icon oui-icon-success\" aria-hidden=true></span> <span data-translate=\"{{:: 'tools_lineDiagnostics_investigation_step_action_' + actionDone + '_done_text' }}\"></span></p><p data-ng-if=\"$ctrl.loading &&\n" + "                           $ctrl.getInvestigationStepQuestions().length === 0 &&\n" + "                           $ctrl.getInvestigationStepSpecificQuestions().length === 0\"><oui-spinner data-size=s></oui-spinner><span class=ml-2 data-translate=tools_lineDiagnostics_please_wait></span></p></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.data.actionsToDo &&\n" + "                         $ctrl.currentLineDiagnostic.data.actionsToDo.length > 0 &&\n" + "                         $ctrl.currentAction && !$ctrl.loading\"><label for=\"{{:: $ctrl.currentAction }}\" class=oui-label><span data-translate=\"{{:: 'tools_lineDiagnostics_investigation_step_action_' + $ctrl.currentAction + '_title' }}\"></span><oui-popover data-ng-if=\"$ctrl.currentAction === 'bePreparedToCheckModemSynchronization'\"><button type=button class=oui-popover-button oui-popover-trigger></button><oui-popover-content data-translate=tools_lineDiagnostics_detection_step_modem_question_help></oui-popover-content></oui-popover><a class=\"oui-link oui-link_icon\" data-ng-if=\"$ctrl.currentAction === 'changeProfile'\" data-ui-sref=telecom.pack.xdsl><span data-translate=tools_lineDiagnostics_investigation_step_action_changeProfile_link></span></a><oui-popover data-ng-if=\"$ctrl.currentAction === 'checkFilter'\"><button type=button class=oui-popover-button oui-popover-trigger></button><oui-popover-content><p class=text-center data-translate=tools_lineDiagnostics_investigation_step_action_checkFilter_example></p><img src=assets/images/diagnostic/filtre-adsl.png data-ng-attr-alt=\"{{:: $ctrl.currentAction }}\"></oui-popover-content></oui-popover></label><oui-button data-variant=secondary data-on-click=$ctrl.addActionDone($ctrl.currentAction) data-disabled=$ctrl.loading><span data-translate=\"{{:: 'tools_lineDiagnostics_investigation_step_action_' + $ctrl.currentAction + '_text' }}\"></span></oui-button><oui-button data-variant=secondary data-on-click=$ctrl.showWarning() data-ng-if=$ctrl.isActionAQuestion($ctrl.currentAction) data-disabled=$ctrl.loading><span data-translate=tools_lineDiagnostics_detail_no></span></oui-button></div><div data-ng-if=\"$ctrl.getInvestigationStepQuestions().length > 0\" data-ng-repeat=\"question in $ctrl.getInvestigationStepQuestions() track by question\"><oui-field data-label=\"{{:: 'tools_lineDiagnostics_investigation_step_question_' + question.name + '_title' | translate }}\"><oui-radio-toggle-group class=d-inline-block data-model=$ctrl.currentLineDiagnostic.data.answers[question.name] data-ng-if=\"question.type === 'boolean' && !$ctrl.loading\" data-on-change=$ctrl.startPoller()><oui-radio data-value=true><span data-translate=tools_lineDiagnostics_detail_yes></span></oui-radio><oui-radio data-value=false><span data-translate=tools_lineDiagnostics_detail_no></span></oui-radio></oui-radio-toggle-group><p data-ng-if=$ctrl.loading><oui-spinner data-size=s></oui-spinner><span class=ml-2 data-translate=tools_lineDiagnostics_please_wait></span></p></oui-field></div><div data-ng-if=\"$ctrl.getInvestigationStepSpecificQuestions().length > 0\"><form name=syncLossOrLowBandwidth novalidate data-ng-if=!$ctrl.loading><div data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('problemType')\"><oui-field data-label=\"{{:: 'tools_lineDiagnostics_investigation_step_question_problemType_title' | translate }}\"><oui-radio-group data-model=$ctrl.currentLineDiagnostic.data.answers.problemType><oui-radio data-value=$ctrl.enumQuestions.problemType.SYNC_LOSS data-required><span data-translate=tools_lineDiagnostics_investigation_step_question_problemType_enum_syncLoss></span></oui-radio><oui-radio data-value=$ctrl.enumQuestions.problemType.LOW_BANDWIDTH data-required><span data-translate=tools_lineDiagnostics_investigation_step_question_problemType_enum_lowBandwidth></span></oui-radio></oui-radio-group></oui-field></div><div data-ng-if=\"($ctrl.currentLineDiagnostic.hasQuestionToAnswer('downloadBandwidthTest') &&\n" + "                                 $ctrl.currentLineDiagnostic.hasQuestionToAnswer('uploadBandwidthTest'))\"><label class=oui-label><span data-translate=tools_lineDiagnostics_investigation_step_question_bandwidthTest_title></span> <a data-ng-href=\"{{:: $ctrl.bandwidthTestSite }}\" target=_blank rel=noopener><span data-ng-bind=$ctrl.bandwidthTestSite></span></a></label><div class=row><oui-field class=\"col-md-4 col-xs-8\" data-label=\"{{:: 'tools_lineDiagnostics_investigation_step_question_downloadBandwidthTest_title' | translate }}\" data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('downloadBandwidthTest')\"><input class=oui-input name=downloadBandwidthTest value=\"$ctrl.currentLineDiagnostic.getQuestionDefaultValue('downloadBandwidthTest')\" data-ng-model=$ctrl.currentLineDiagnostic.data.answers.downloadBandwidthTest data-required></oui-field><oui-field class=\"col-md-4 col-xs-8\" data-label=\"{{:: 'tools_lineDiagnostics_investigation_step_question_uploadBandwidthTest_title' | translate }}\" data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('uploadBandwidthTest')\"><input class=oui-input name=uploadBandwidthTest value=\"$ctrl.currentLineDiagnostic.getQuestionDefaultValue('uploadBandwidthTest')\" data-ng-model=$ctrl.currentLineDiagnostic.data.answers.uploadBandwidthTest data-required></oui-field><oui-field class=\"col-md-3 col-xs-8\" data-label=\"{{:: 'tools_lineDiagnostics_investigation_step_question_bandwidthTestUnit_title' | translate }}\" data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('bandwidthTestUnit')\"><oui-select name=bandwidthTestUnit placeholder=\"{{:: 'tools_lineDiagnostics_investigation_step_question_bandwidthTestUnit_placeholder' | translate }}\" data-model=$ctrl.currentLineDiagnostic.data.answers.bandwidthTestUnit data-items=$ctrl.enumQuestions.bandwidthTestUnit data-align=start data-required><span data-ng-bind=$item></span></oui-select></oui-field></div></div><oui-button data-variant=primary data-disabled=!syncLossOrLowBandwidth.$valid data-on-click=$ctrl.startPoller() data-ng-if=!$ctrl.loading><span data-translate=tools_lineDiagnostics_validate></span></oui-button></form><p data-ng-if=$ctrl.loading><oui-spinner data-size=s></oui-spinner><span class=ml-2 data-translate=tools_lineDiagnostics_please_wait></span></p></div></div></div><div class=col-md-4 data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'waitingRobot' && !$ctrl.currentLineDiagnostic.isLongActionInProgress()\"><p><oui-spinner data-size=s></oui-spinner><span data-translate=tools_lineDiagnostics_waitingRobot></span> <span data-translate=tools_lineDiagnostics_please_wait></span></p></div><div class=col-md-8><oui-message data-type=warning data-ng-if=$ctrl.actionRequired><span data-translate=tools_lineDiagnostics_action_required_action></span></oui-message></div><div class=\"col-md-5 oui-message oui-message_info\" data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('resolvedAfterTests') && !$ctrl.loading\"><p class=oui-header_6 data-translate=tools_lineDiagnostics_investigation_step_action_is_problem_solved></p><oui-radio-toggle-group class=d-inline-block data-model=$ctrl.currentLineDiagnostic.data.answers.resolvedAfterTests data-on-change=$ctrl.startPoller()><oui-radio data-value=true><span data-translate=tools_lineDiagnostics_detail_yes></span></oui-radio><oui-radio data-value=false><span data-translate=tools_lineDiagnostics_detail_no></span></oui-radio></oui-radio-toggle-group></div><div class=col-md-6 data-ng-if=$ctrl.currentLineDiagnostic.isLongActionInProgress()><oui-spinner></oui-spinner><p class=oui-header_6 data-translate=tools_lineDiagnostics_header_investigation_step_selt_test_title></p><p data-translate=tools_lineDiagnostics_header_investigation_step_selt_test_subtitle></p></div>");
+
+    $templateCache.put('/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/steps/ovh-angular-line-diagnostics-solution-proposal-step.html', "<div data-ng-if=$ctrl.currentLineDiagnostic.data.answers.resolvedAfterTests><img class=col-md-2 src=assets/images/diagnostic/human-good.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=tools_lineDiagnostics_solution_proposal_step_problem_solved_title></p><p data-translate=tools_lineDiagnostics_solution_proposal_step_problem_solved_subtitle></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_exit_diagnostic' | translate }}\" data-on-click=\"$ctrl.$state.go('^')\"></oui-button></span></div><div data-ng-if=$ctrl.isMonitoringAlreadyExists()><img class=col-md-2 src=assets/images/diagnostic/human-think.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=\"{{:: 'tools_lineDiagnostics_error_context_monitoringTodoAlreadyExists_title' }}\"></p><p data-translate=\"{{:: 'tools_lineDiagnostics_error_context_monitoringTodoAlreadyExists_subtitle' }}\"></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_exit_diagnostic' | translate }}\" data-on-click=\"$ctrl.$state.go('^')\"></oui-button></span></div><div data-ng-if=!$ctrl.currentLineDiagnostic.data.answers.resolvedAfterTests><div data-ng-if=!$ctrl.showRequestForm><div data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'waitingValidation'\"><img class=col-md-2 src=assets/images/diagnostic/human-speedAndGraphic.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=tools_lineDiagnostics_solution_proposal_step_waitingValidation_title></p><p data-translate=tools_lineDiagnostics_solution_proposal_step_waitingValidation_subtitle></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_exit_diagnostic' | translate }}\" data-on-click=\"$ctrl.$state.go('^')\"></oui-button></span></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'waitingHuman'\"><div class=\"col-md-12 form-group\" data-ng-if=\"$ctrl.currentLineDiagnostic.data.answers.problemType === 'lowBandwidth'\"><p data-translate=tools_lineDiagnostics_solution_proposal_step_bandwidthCapabilities data-translate-values=\"{\n" + "                        'up': $ctrl.bandwidthDetails.theoricalBandwidth.up,\n" + "                        'down': $ctrl.bandwidthDetails.theoricalBandwidth.down\n" + "                   }\"></p><p data-translate=tools_lineDiagnostics_solution_proposal_step_bandwidthCurrent data-translate-values=\"{\n" + "                        'up': $ctrl.bandwidthDetails.currentBandwidth.up,\n" + "                        'down': $ctrl.bandwidthDetails.currentBandwidth.down\n" + "                   }\"></p></div><img class=col-md-2 src=assets/images/diagnostic/human-think.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=tools_lineDiagnostics_solution_proposal_step_problem_to_resolve_title></p><p data-translate=tools_lineDiagnostics_solution_proposal_step_problem_to_resolve_subtitle></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_fill_request_form' | translate }}\" data-on-click=\"$ctrl.showRequestForm = true\"></oui-button></span></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'syncLossOrLowBandwidth'\"><img class=col-md-2 src=assets/images/diagnostic/human-think.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=tools_lineDiagnostics_solution_proposal_step_problem_to_monitor_title_title></p><p data-translate=tools_lineDiagnostics_solution_proposal_step_problem_to_monitor_title_subtitle></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_fill_request_form' | translate }}\" data-on-click=\"$ctrl.showRequestForm = true\"></oui-button></span></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'haveToConnectModemOnTheRightPlug'\"><img class=col-md-2 src=assets/images/diagnostic/human-think.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=tools_lineDiagnostics_solution_proposal_step_haveToConnectModemOnTheRightPlug_title></p><p data-translate=tools_lineDiagnostics_solution_proposal_step_haveToConnectModemOnTheRightPlug_subtitle></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_exit_diagnostic' | translate }}\" data-on-click=\"$ctrl.$state.go('^')\"></oui-button></span></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'connectionProblem'\"><img class=col-md-2 src=assets/images/diagnostic/human-think.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=tools_lineDiagnostics_solution_proposal_step_connectionProblem_title></p><p data-translate=tools_lineDiagnostics_solution_proposal_step_connectionProblem_subtitle></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_exit_diagnostic' | translate }}\" data-on-click=\"$ctrl.$state.go('^')\"></oui-button></span></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'cancelled'\"><img class=col-md-2 src=assets/images/diagnostic/human-think.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=tools_lineDiagnostics_solution_proposal_step_cancelled_title></p><p data-translate=tools_lineDiagnostics_solution_proposal_step_cancelled_subtitle></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_exit_diagnostic' | translate }}\" data-on-click=\"$ctrl.$state.go('^')\"></oui-button></span></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'validationRefused'\"><img class=col-md-2 src=assets/images/diagnostic/human-think.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=tools_lineDiagnostics_solution_proposal_step_validationRefused_title></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_exit_diagnostic' | translate }}\" data-on-click=\"$ctrl.$state.go('^')\"></oui-button></span></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'interventionRequested'\"><img class=col-md-2 src=assets/images/diagnostic/human-think.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=tools_lineDiagnostics_solution_proposal_step_interventionRequested_title></p><p data-translate=tools_lineDiagnostics_solution_proposal_step_interventionRequested_subtitle></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_exit_diagnostic' | translate }}\" data-on-click=\"$ctrl.$state.go('^')\"></oui-button></span></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'noBandwidthFault'\"><img class=col-md-2 src=assets/images/diagnostic/human-think.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=tools_lineDiagnostics_solution_proposal_step_noBandwidthFault_title></p><p data-translate=tools_lineDiagnostics_solution_proposal_step_noDefaultAnymore_subtitle></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_exit_diagnostic' | translate }}\" data-on-click=\"$ctrl.$state.go('^')\"></oui-button></span></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'noProblemAnymore'\"><img class=col-md-2 src=assets/images/diagnostic/human-think.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=tools_lineDiagnostics_solution_proposal_step_noProblemAnymore_title></p><p data-translate=tools_lineDiagnostics_solution_proposal_step_noDefaultAnymore_subtitle></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_exit_diagnostic' | translate }}\" data-on-click=\"$ctrl.$state.go('^')\"></oui-button></span></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.data.error === 'monitoringTodoAlreadyExists'\"><img class=col-md-2 src=assets/images/diagnostic/human-think.svg width=180 height=180 data-ng-attr-alt=\"{{:: $ctrl.currentLineDiagnostic.status }}\"> <span class=col-md-8><p class=oui-header_4 data-translate=tools_lineDiagnostics_error_context_monitoringTodoAlreadyExists_title></p><p data-translate=tools_lineDiagnostics_error_context_monitoringTodoAlreadyExists_subtitle></p><oui-button data-variant=primary data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_exit_diagnostic' | translate }}\" data-on-click=\"$ctrl.$state.go('^')\"></oui-button></span></div></div><div class=col-md-8 data-ng-if=$ctrl.showRequestForm><form class=form-group name=requestInterventionForm novalidate data-ng-if=\"$ctrl.currentLineDiagnostic.data.toAnswer && $ctrl.currentLineDiagnostic.data.toAnswer.length > 0 && !$ctrl.loading\"><div data-ng-if=$ctrl.currentLineDiagnostic.needAppointmentDetails()><oui-field data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_idAppointment_title' | translate }}\" data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('idAppointment')\"><oui-select name=idAppointment placeholder=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_idAppointment_text' | translate }}\" data-match=label data-model=$ctrl.appointmentSlot data-items=\"$ctrl.currentLineDiagnostic.getQuestionOptions('idAppointment')\" data-align=start data-on-change=\"$ctrl.currentLineDiagnostic.data.answers.idAppointment = $ctrl.appointmentSlot.id\" required><span ng-bind=$item.label></span></oui-select></oui-field><oui-field data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_individualSite_title' | translate }}\" data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('individualSite')\"><oui-radio-toggle-group class=d-inline-block data-model=$ctrl.currentLineDiagnostic.data.answers.individualSite><oui-radio data-value=true required><span data-translate=tools_lineDiagnostics_detail_yes></span></oui-radio><oui-radio data-value=false required><span data-translate=tools_lineDiagnostics_detail_no></span></oui-radio></oui-radio-toggle-group></oui-field><oui-field data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_siteClosedDays_title' | translate }}\" data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('siteClosedDays')\"><input class=oui-input name=siteClosedDays data-ng-model=$ctrl.currentLineDiagnostic.data.answers.siteClosedDays required></oui-field><oui-field data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_siteOpening_title' | translate }}\" data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('siteOpening')\"><input class=oui-input name=siteOpening data-ng-model=$ctrl.currentLineDiagnostic.data.answers.siteOpening data-maxlength=20 required></oui-field><div data-ng-if=$ctrl.currentLineDiagnostic.hasTimePeriodQuestions()><label class=oui-label data-translate=tools_lineDiagnostics_solution_proposal_step_request_form_question_hours_title></label><div class=row><oui-field class=\"col-md-3 col-xs-8\" data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_startMorningHours_title' | translate }}\"><input class=oui-input name=startMorningHours data-ng-pattern=\"/^[0-9:hH]{0,5}$/\" data-ng-model=$ctrl.currentLineDiagnostic.data.answers.startMorningHours required></oui-field><oui-field class=\"col-md-3 col-xs-8\" data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_endMorningHours_title' | translate }}\"><input class=oui-input name=endMorningHours data-ng-pattern=\"/^[0-9:hH]{0,5}$/\" data-ng-model=$ctrl.currentLineDiagnostic.data.answers.endMorningHours required></oui-field></div><div class=row><oui-field class=\"col-md-3 col-xs-8\" data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_startAfternoonHours_title' | translate }}\"><input class=oui-input name=startAfternoonHours data-ng-pattern=\"/^[0-9:hH]{0,5}$/\" data-ng-model=$ctrl.currentLineDiagnostic.data.answers.startAfternoonHours required></oui-field><oui-field class=\"col-md-3 col-xs-8\" data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_endAfternoonHours_title' | translate }}\"><input class=oui-input name=endAfternoonHours data-ng-pattern=\"/^[0-9:hH]{0,5}$/\" data-ng-model=$ctrl.currentLineDiagnostic.data.answers.endAfternoonHours required></oui-field></div></div><oui-field data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_secureSite_title' | translate }}\" data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('secureSite')\"><oui-radio-toggle-group class=d-inline-block data-model=$ctrl.currentLineDiagnostic.data.answers.secureSite><oui-radio data-value=true required><span data-translate=tools_lineDiagnostics_detail_yes></span></oui-radio><oui-radio data-value=false required><span data-translate=tools_lineDiagnostics_detail_no></span></oui-radio></oui-radio-toggle-group></oui-field><oui-field data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_siteDigicode_title' | translate }}\" data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('siteDigicode')\"><input class=oui-input name=siteDigicode data-ng-model=$ctrl.currentLineDiagnostic.data.answers.siteDigicode></oui-field><oui-button data-disabled=!requestInterventionForm.$valid data-on-click=$ctrl.startPoller() data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_intervention_request_continue' | translate }}\" data-variant=primary></oui-button></div><div class=form-group data-ng-if=!$ctrl.currentLineDiagnostic.needAppointmentDetails()><oui-field data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_ovhTicket_title' | translate }}\" data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('ovhTicket')\"><input class=oui-input name=ovhTicket data-ng-model=$ctrl.currentLineDiagnostic.data.answers.ovhTicket></oui-field><div class=row><oui-field class=\"col-md-6 col-xs-12\" data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_modemType_title' | translate }}\" data-ng-if=\"$ctrl.currentLineDiagnostic.hasQuestionToAnswer('modemType')\"><input class=oui-input name=modemType value=\"$ctrl.currentLineDiagnostic.getQuestionDefaultValue('modemType')\" data-ng-model=$ctrl.currentLineDiagnostic.data.answers.modemType required></oui-field><oui-field class=\"col-md-6 col-xs-12\" data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_contactPhone_title' | translate }}\"><input class=oui-input name=contactPhone data-ng-model=$ctrl.currentLineDiagnostic.data.answers.contactPhone required></oui-field></div><oui-field data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_comment_title' | translate }}\"><oui-textarea data-model=$ctrl.currentLineDiagnostic.data.answers.comment data-rows=7 data-minlength=5 data-maxlength=200 required></oui-textarea></oui-field><oui-field data-label=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_followBySms_title' | translate }}\"><oui-radio-toggle-group class=d-inline-block data-model=$ctrl.currentLineDiagnostic.data.answers.followBySms><oui-radio data-value=true required><span data-translate=tools_lineDiagnostics_detail_yes></span></oui-radio><oui-radio data-value=false required><span data-translate=tools_lineDiagnostics_detail_no></span></oui-radio></oui-radio-toggle-group></oui-field><oui-checkbox data-ng-init=\"$ctrl.currentLineDiagnostic.data.answers.conditionsAccepted = false\" data-model=$ctrl.currentLineDiagnostic.data.answers.conditionsAccepted><span data-translate=tools_lineDiagnostics_solution_proposal_step_request_form_question_conditionsAccepted_title></span></oui-checkbox><oui-button data-disabled=\"!requestInterventionForm.$valid || !$ctrl.currentLineDiagnostic.data.answers.conditionsAccepted\" data-on-click=$ctrl.startPoller() data-text=\"{{:: 'tools_lineDiagnostics_solution_proposal_step_intervention_request_validation' | translate }}\" data-variant=primary></oui-button></div></form><p data-ng-if=$ctrl.loading><oui-spinner data-size=s></oui-spinner><span class=ml-2 data-translate=tools_lineDiagnostics_please_wait></span></p></div></div>");
 }]);
 //# sourceMappingURL=ovh-angular-line-diagnostics.js.map

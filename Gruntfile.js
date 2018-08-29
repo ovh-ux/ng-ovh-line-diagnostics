@@ -45,7 +45,7 @@ module.exports = function (grunt) {
 
         ngtemplates: {
             "ovh-angular-line-diagnostics": {
-                src: "<%=srcdir%>/ovh-angular-line-diagnostics/*.html",
+                src: "<%=srcdir%>/ovh-angular-line-diagnostics/**/*.html",
                 dest: "<%=builddir%>/templates.js",
                 options: {
                     app: "ovh-angular-line-diagnostics",
@@ -62,6 +62,19 @@ module.exports = function (grunt) {
                     prefix: "/ovh-angular-line-diagnostics/",
                     standalone: false
                 }
+            }
+        },
+
+        ngAnnotate: {
+            dist: {
+                files: [
+                    {
+                        expand: true,
+                        cwd: "<%= builddir %>",
+                        src: "ovh-angular-line-diagnostics.js",
+                        dest: "<%= builddir %>"
+                    }
+                ]
             }
         },
 
@@ -99,8 +112,11 @@ module.exports = function (grunt) {
                 files: {
                     "<%= transdir %>/ovh-angular-line-diagnostics.js": [
                         "<%=srcdir%>/ovh-angular-line-diagnostics/ovh-angular-line-diagnostics.js",
+                        "<%=srcdir%>/ovh-angular-line-diagnostics/ovh-angular-line-diagnostics.component.js",
+                        "<%=srcdir%>/ovh-angular-line-diagnostics/ovh-angular-line-diagnostics.constant.js",
+                        "<%=srcdir%>/ovh-angular-line-diagnostics/ovh-angular-line-diagnostics.controller.js",
+                        "<%=srcdir%>/ovh-angular-line-diagnostics/ovh-angular-line-diagnostics.factory.js",
                         "<%=srcdir%>/ovh-angular-line-diagnostics/ovh-angular-line-diagnostics.provider.js",
-                        "<%=srcdir%>/ovh-angular-line-diagnostics/ovh-angular-line-diagnostics.directive.js",
                         "<%=builddir%>/templates.js"
                     ]
                 }
@@ -168,7 +184,7 @@ module.exports = function (grunt) {
         grunt.task.run(["clean", "eslint"]);
     });
 
-    grunt.registerTask("build", ["eslint", "clean", "ovhTranslation", "ngtemplates", "concat", "babel", "complexity", "uglify", "copy:dist", "less:dist"]);
+    grunt.registerTask("build", ["eslint", "clean", "ovhTranslation", "ngtemplates", "concat", "babel", "complexity", "ngAnnotate", "uglify", "copy:dist", "less:dist"]);
 
     // Increase version number. Type = minor|major|patch
     grunt.registerTask("release", "Release", () => {

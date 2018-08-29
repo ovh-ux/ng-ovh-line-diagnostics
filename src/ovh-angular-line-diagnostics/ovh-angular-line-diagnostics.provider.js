@@ -34,9 +34,8 @@ angular.module("ovh-angular-line-diagnostics").provider("LineDiagnostics", funct
         return translationPath;
     };
 
-    this.$get = ["$injector", "Poller", "$translatePartialLoader", "$translate", function ($injector, Poller, $translatePartialLoader, $translate) {
+    this.$get = ["$translatePartialLoader", "$translate", "OvhApiXdslDiagnosticLines", function ($translatePartialLoader, $translate, OvhApiXdslDiagnosticLines) {
         const lineDiagnosticsService = {};
-        const api = $injector.get(requestProxy);
 
         lineDiagnosticsService.loadTranslations = function () {
             angular.forEach([translationPath], (part) => {
@@ -46,8 +45,8 @@ angular.module("ovh-angular-line-diagnostics").provider("LineDiagnostics", funct
             return $translate.refresh();
         };
 
-        lineDiagnosticsService.getSetDiagnostic = function (uriParams, datas) {
-            const syncParam = { faultType: "noSync" };
+        lineDiagnosticsService.getRunDiagnostic = function (uriParams, datas) {
+            const syncParam = { faultType: "unknown" };
             const postParams = datas && datas.faultType ? datas : angular.extend(syncParam, datas || {});
 
             if (postParams && postParams.answers) {
@@ -57,67 +56,18 @@ angular.module("ovh-angular-line-diagnostics").provider("LineDiagnostics", funct
                     }
                 });
             }
-            return api.post(URI.expand([pathPrefix, "lines", "{number}", "diagnostic/run"].join("/"), uriParams).toString(), postParams);
+
+            return OvhApiXdslDiagnosticLines.v6().runDiagnostic(_.merge(uriParams, postParams));
         };
 
-        lineDiagnosticsService.getDeleteDiagnostic = function (uriParams) {
-            return api.post(URI.expand([pathPrefix, "lines", "{number}", "diagnostic/cancel"].join("/"), uriParams).toString());
+        lineDiagnosticsService.getCancelDiagnostic = function (uriParams) {
+            return OvhApiXdslDiagnosticLines.v6().cancelDiagnostic(uriParams, { });
         };
 
-        // lineDiagnosticsService.getDiagnosticPassRobot = function (serviceName, num) {
-        //    return api.post([pathPrefix, 'line', serviceName, 'diagnostic/noSync/passRobot', num].join('/'));
-        // };
-
-        lineDiagnosticsService.getWaitingValidationDiagnostics = function () {
-            const $q = $injector.get("$q");
-            return api.get([pathPrefix, "diagnostic/getWaitingValidationDiagnostics"].join("/")).then((result) => result.data, (err) => $q.reject(err));
-        };
-
-        lineDiagnosticsService.pollWaitingValidationDiagnostics = function () {
-            return Poller.poll(
-                [pathPrefix, "diagnostic/getWaitingValidationDiagnostics"].join("/"),
-                pollingApiOptions,
-                {
-                    namespace: "tools_validation_diagnostics",
-                    method: "get",
-                    interval: 30000
-                }
-            );
-        };
-
-        lineDiagnosticsService.killPollWaitingValidationDiagnostics = function () {
-            Poller.kill({ namespace: "tools_validation_diagnostics" });
-        };
-
-        lineDiagnosticsService.validateDiagnostics = function (id, datas) {
-            const $q = $injector.get("$q");
-            return api.post([pathPrefix, "diagnostic", id, "validate"].join("/"), datas).then((result) => result.data, (err) => $q.reject(err));
-        };
-
-        lineDiagnosticsService.runPollGetDiagnostic = function (uriParams, datas) {
-            const syncParam = { faultType: "noSync" };
-            const postParams = datas && datas.faultType ? datas : angular.extend(syncParam, datas || {});
-            return Poller.poll(
-                URI.expand([pathPrefix, "lines", "{number}", "diagnostic/run"].join("/"), uriParams).toString(),
-                pollingApiOptions,
-                {
-                    namespace: "tools_line_diagnostics",
-                    method: "post",
-                    postData: postParams,
-                    interval: 5000,
-                    successRule (data) {
-                        return data.status !== "waitingRobot";
-                    }// ,
-                    // errorRule : function (data) {
-                    //     console.log(data.status !== 'waitingHuman' && !!data.data.error);
-                    //     return data.status !== 'waitingHuman' && !!data.data.error; //TODO review that
-                    // }
-                }
-            );
+        lineDiagnosticsService.deletePollDiagnostic = function () {
+            return OvhApiXdslDiagnosticLines.v6().killPollerDiagnostic();
         };
 
         return lineDiagnosticsService;
-
     }];
-
 });
