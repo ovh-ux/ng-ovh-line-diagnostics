@@ -1,10 +1,11 @@
 angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl", class LineDiagnosticsCtrl {
-    constructor ($interval, $q, $state, $timeout, $translate, LineDiagnostics, LineDiagnosticFactory, Toast, DIAGNOSTICS_CONSTANTS) {
+    constructor ($interval, $q, $state, $timeout, $translate, atInternet, LineDiagnostics, LineDiagnosticFactory, Toast, DIAGNOSTICS_CONSTANTS) {
         this.$interval = $interval;
         this.$q = $q;
         this.$state = $state;
         this.$timeout = $timeout;
         this.$translate = $translate;
+        this.atInternet = atInternet;
         this.LineDiagnosticsService = LineDiagnostics;
         this.LineDiagnosticFactory = LineDiagnosticFactory;
         this.Toast = Toast;
@@ -27,6 +28,8 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
         this.actionRequired = false;
         this.loading = false;
         this.progressBarCycle = null;
+
+        this.trackPage(this.currentStep);
 
         this.LineDiagnosticsService.loadTranslations().then(() => {
             this.animateProgressBar();
@@ -113,6 +116,7 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
     }
 
     setCurrentStep () {
+        const previousStep = this.currentStep;
         const steps = this.DIAGNOSTICS_CONSTANTS.STEPS;
 
         switch (this.currentLineDiagnostic.faultType) {
@@ -134,6 +138,10 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
             break;
         default:
             this.currentStep = steps.DETECTION.LABEL;
+        }
+
+        if (this.currentStep !== previousStep) {
+            this.trackPage(this.currentStep);
         }
     }
 
@@ -188,12 +196,43 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
     }
 
     addActionDone (action) {
+        this.trackAction(action);
         this.actionRequired = false;
         this.currentLineDiagnostic.addActionDone(action);
         this.startPoller();
     }
 
+    answerQuestion (question, answer) {
+        this.trackAction(`${question}-${answer ? "yes" : "no"}`);
+        this.startPoller();
+    }
+
+    goToRequestForm () {
+        this.trackAction("goToRequestForm");
+        this.showRequestForm = true;
+    }
+
     showWarning () {
         this.actionRequired = true;
+    }
+
+    trackAction (action) {
+        console.log(action);
+        this.atInternet.trackClick({
+            name: `telecom::pack::xdsl::${action}`,
+            type: "action",
+            chapter1: "telecom",
+            level2: "Telecom"
+        });
+    }
+
+    trackPage (page) {
+        console.log(page);
+        this.atInternet.trackPage({
+            name: `telecom::pack::xdsl::${page}`,
+            type: "navigation",
+            chapter1: "telecom",
+            level2: "Telecom"
+        });
     }
 });
