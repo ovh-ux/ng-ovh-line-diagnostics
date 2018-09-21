@@ -207,9 +207,21 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
         this.startPoller();
     }
 
+    answerSpecificQuestion () {
+        const action = this.currentLineDiagnostic.data.answers.problemType ?
+            "sendProblemType" : "sendBandwidthTest";
+        this.trackAction(action);
+        this.startPoller();
+    }
+
     goToRequestForm () {
         this.trackAction("goToRequestForm");
         this.showRequestForm = true;
+    }
+
+    sendInterventionForm () {
+        this.trackAction("sendInterventionForm");
+        this.startPoller();
     }
 
     showWarning () {
@@ -217,7 +229,6 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
     }
 
     trackAction (action) {
-        console.log(action);
         this.atInternet.trackClick({
             name: `telecom::pack::xdsl::${action}`,
             type: "action",
@@ -227,7 +238,6 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
     }
 
     trackPage (page) {
-        console.log(page);
         this.atInternet.trackPage({
             name: `telecom::pack::xdsl::${page}`,
             type: "navigation",
