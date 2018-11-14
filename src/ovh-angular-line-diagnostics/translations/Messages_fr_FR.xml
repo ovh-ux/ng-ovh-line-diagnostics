@@ -21,8 +21,11 @@
 
    <translation id="tools_lineDiagnostics_diagnostic_run_error">Une erreur est survenue lors du diagnostic. Veuillez réessayer plus tard.</translation>
    <translation id="tools_lineDiagnostics_diagnostic_cancel_error">Une erreur est survenue lors de l'annulation du diagnostic</translation>
-   <translation id="tools_lineDiagnostics_detection_step_modem_question">Votre modem est-il synchronisé ?</translation>
-   <translation id="tools_lineDiagnostics_detection_step_modem_question_help">Un voyant sur le modem (broadband ou ADSL) devrait vous indiquer le statut de la synchronisation. Si ce n'est pas le cas, vous devriez retrouver ce statut de synchronisation sur l'interface du modem.</translation>
+   <translation id="tools_lineDiagnostics_detection_step_modem_question">Quel est l'état du voyant de synchronisation (Broadband ou ADSL) de votre modem ?</translation>
+   <translation id="tools_lineDiagnostics_detection_step_modem_question_help">Exemple de voyant broadband</translation>
+   <translation id="tools_lineDiagnostics_detection_step_modem_light_on">Fixe</translation>
+   <translation id="tools_lineDiagnostics_detection_step_modem_light_off">Éteint</translation>
+   <translation id="tools_lineDiagnostics_detection_step_modem_light_blink">Clignotant</translation>
    <translation id="tools_lineDiagnostics_detection_step_warning_title">Nous avons détecté un incident sur votre ligne.</translation>
    <translation id="tools_lineDiagnostics_detection_step_warning">Nous allons maintenant lancer un diagnostic de votre ligne pour rétablir votre accès internet rapidement.
    </translation>
