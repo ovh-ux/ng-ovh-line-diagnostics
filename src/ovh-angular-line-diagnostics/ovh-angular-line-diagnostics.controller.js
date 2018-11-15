@@ -1,8 +1,9 @@
 angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl", class LineDiagnosticsCtrl {
-    constructor ($interval, $timeout, $translate, atInternet, LineDiagnostics, LineDiagnosticFactory, Toast, DIAGNOSTICS_CONSTANTS) {
+    constructor ($interval, $timeout, $translate, $uibModal, atInternet, LineDiagnostics, LineDiagnosticFactory, Toast, DIAGNOSTICS_CONSTANTS) {
         this.$interval = $interval;
         this.$timeout = $timeout;
         this.$translate = $translate;
+        this.$uibModal = $uibModal;
         this.atInternet = atInternet;
         this.LineDiagnosticsService = LineDiagnostics;
         this.LineDiagnosticFactory = LineDiagnosticFactory;
@@ -222,6 +223,15 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
         this.startPoller();
     }
 
+    confirmIntervention () {
+        this.openDialog("ovh-angular-line-diagnostics-confirm-intervention-dialog")
+            .then((result) => {
+                if (result) {
+                    this.answerQuestion("conditionsAccepted", true);
+                }
+            });
+    }
+
     showWarning () {
         this.actionRequired = true;
     }
@@ -242,5 +252,13 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
             chapter1: "telecom",
             level2: "Telecom"
         });
+    }
+
+    openDialog (templateName) {
+        const modal = this.$uibModal.open({
+            animation: true,
+            templateUrl: `/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/dialogs/${templateName}.html`
+        });
+        return modal.result;
     }
 });

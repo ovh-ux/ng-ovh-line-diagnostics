@@ -8,6 +8,8 @@
    <!-- COMMON -->
    <translation id="tools_lineDiagnostics_detail_yes" qtlid="34776">Oui</translation>
    <translation id="tools_lineDiagnostics_detail_no" qtlid="34788">Non</translation>
+   <translation id="tools_lineDiagnostics_cancel">Annuler</translation>
+   <translation id="tools_lineDiagnostics_continue">Continuer</translation>
    <translation id="tools_lineDiagnostics_waitingRobot">Test technique en cours.</translation>
    <translation id="tools_lineDiagnostics_please_wait">Veuillez patienter</translation>
    <translation id="tools_lineDiagnostics_hours_to">à</translation>
@@ -171,7 +173,6 @@
    <translation id="tools_lineDiagnostics_solution_proposal_step_cancelled_subtitle">Nous mettons tout en oeuvre pour le résoudre au plus vite. N'hésitez pas à réitérer cette manipulation ultérieurement.</translation>
 
    <translation id="tools_lineDiagnostics_solution_proposal_step_exit_diagnostic">Quitter</translation>
-   <translation id="tools_lineDiagnostics_solution_proposal_step_intervention_request_continue">Continuer</translation>
    <translation id="tools_lineDiagnostics_solution_proposal_step_intervention_request_validation">Valider ma demande d'intervention</translation>
 
    <translation id="tools_lineDiagnostics_solution_proposal_step_interventionRequested_title">Une intervention a été demandée.</translation>
@@ -181,6 +182,11 @@
    <translation id="tools_lineDiagnostics_solution_proposal_step_waitingValidation_subtitle">Une demande d'intervention a été effectuée et est en attente de validation de la part de l'assistance technique OVH. Un ticket de suivi sera créé une fois cette validation effectuée.</translation>
 
    <translation id="tools_lineDiagnostics_solution_proposal_step_validationRefused">La demande d'intervention a été refusée par l'assistance technique OVH.</translation>
+
+   <!-- Modal -->
+   <translation id="tools_lineDiagnostics_confirm_modal_title">Confirmation de demande d'intervention</translation>
+   <translation id="tools_lineDiagnostics_confirm_modal_explanation">Afin de finaliser votre demande d'intervention, nous allons réalisé un test technique qui rendra votre <strong>connexion internet indisponible pendant 15 minutes</strong> environ. Merci de prendre toutes les précautions nécessaires à ce cas avant de continuer.</translation>
+   <translation id="tools_lineDiagnostics_confirm_modal_unplug_modem_text">Immédiatement après avoir cliquer sur Continuer, vous devez débrancher votre modem de votre prise téléphonique.</translation>
 
    <!-- ERRORS -->
    <translation id="tools_lineDiagnostics_error_context_monitoringTodoAlreadyExists_title" qtlid="407078">Surveillance de la ligne déjà en cours.</translation>
