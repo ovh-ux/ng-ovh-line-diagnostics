@@ -372,7 +372,7 @@
                         <input class="oui-input"
                                type="text"
                                name="modemType"
-                               value="$ctrl.currentLineDiagnostic.getQuestionDefaultValue('modemType')"
+                               data-ng-value="$ctrl.currentLineDiagnostic.getQuestionDefaultValue('modemType')"
                                data-ng-model="$ctrl.currentLineDiagnostic.data.answers.modemType"
                                required>
                     </oui-field>
@@ -382,6 +382,7 @@
                         <input class="oui-input"
                                type="text"
                                name="contactPhone"
+                               data-ng-value="$ctrl.currentLineDiagnostic.getQuestionDefaultValue('contactPhone')"
                                data-ng-model="$ctrl.currentLineDiagnostic.data.answers.contactPhone"
                                data-ng-pattern="/^(0033|0)\d{9}$/"
                                required>
