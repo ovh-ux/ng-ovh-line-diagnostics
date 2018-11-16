@@ -27,6 +27,8 @@ angular.module("ovh-angular-line-diagnostics").factory("LineDiagnosticFactory", 
             this.faultType = lineDiagnostic.faultType;
             this.status = lineDiagnostic.status;
             this.data = lineDiagnostic.data;
+
+            this.data.answers.contactPhone = this.data.answers.contactPhone || this.data.lineDetails.contactPhone;
         }
 
         isLongActionInProgress () {
