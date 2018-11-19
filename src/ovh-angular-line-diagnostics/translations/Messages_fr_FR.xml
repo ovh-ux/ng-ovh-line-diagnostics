@@ -140,12 +140,12 @@
    <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_individualSite_title">S'agit-il de votre domicile ?</translation>
    <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_siteClosedDays_title">Quels sont le ou les jours de fermeture de votre site ?</translation>
    <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_siteOpening_title">Merci de nous indiquer les horaires d'accès au site.</translation>
-   <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_modemType_title">Si votre modem diffère de celui indiqué par défaut, merci de nous en indiquer la marque et la référence.</translation>
+   <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_modemType_title">Merci d'indiquer la marque et la référence de votre modem.</translation>
    <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_modemMac_title">Merci d'indiquer l'adresse MAC de votre modem.</translation>
    <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_datetimeOfAppearance_title">Merci d'indiquer la date et l'heure approximative d'apparition du dysfonctionnement.</translation>
    <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_idAppointment_title">Choisissez l'un des créneaux suivants pour permettre le passage de notre technicien.</translation>
    <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_idAppointment_text">Choisissez un créneau.</translation>
-   <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_contactPhone_title">Merci de nous indiquer un numéro si celui inscrit dans votre espace client a changé.</translation>
+   <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_contactPhone_title">Merci d'indiquer un numéro sur lequel vous pourrez être joint.</translation>
    <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_followBySms_title">Souhaitez-vous suivre le déroulement des opérations par SMS ?</translation>
    <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_ovhTicket_title">Si un ticket est actuellement ouvert pour ce dysfonctionnement, merci de nous en indiquer le numéro.</translation>
    <translation id="tools_lineDiagnostics_solution_proposal_step_request_form_question_comment_title">Précisez ici toutes les informations nécessaires au bon rétablissement de votre connexion Internet, ainsi que vos disponibilités. (Entre 5 et 200 caractères)</translation>
