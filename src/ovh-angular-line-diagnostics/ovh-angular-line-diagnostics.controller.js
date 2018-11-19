@@ -257,19 +257,7 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
     openDialog (templateName) {
         const modal = this.$uibModal.open({
             animation: true,
-            controller: [
-                "$scope",
-                "$uibModalInstance",
-                "continueButtonLabel",
-                ($scope, $uibModalInstance, continueButtonLabel) => {
-                    $scope.$close = () => $uibModalInstance.close();
-                    $scope.$dismiss = () => $uibModalInstance.dismiss();
-                    $scope.continueButtonLabel = continueButtonLabel;
-                }],
-            templateUrl: `/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/dialogs/${templateName}.html`,
-            resolve: {
-                continueButtonLabel: () => this.$translate.instant("tools_lineDiagnostics_continue")
-            }
+            templateUrl: `/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/dialogs/${templateName}.html`
         });
         return modal.result;
     }

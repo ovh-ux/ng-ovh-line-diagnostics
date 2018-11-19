@@ -370,25 +370,9 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
     }, {
         key: "openDialog",
         value: function openDialog(templateName) {
-            var _this9 = this;
-
             var modal = this.$uibModal.open({
                 animation: true,
-                controller: ["$scope", "$uibModalInstance", "continueButtonLabel", function ($scope, $uibModalInstance, continueButtonLabel) {
-                    $scope.$close = function () {
-                        return $uibModalInstance.close();
-                    };
-                    $scope.$dismiss = function () {
-                        return $uibModalInstance.dismiss();
-                    };
-                    $scope.continueButtonLabel = continueButtonLabel;
-                }],
-                templateUrl: "/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/dialogs/" + templateName + ".html",
-                resolve: {
-                    continueButtonLabel: function continueButtonLabel() {
-                        return _this9.$translate.instant("tools_lineDiagnostics_continue");
-                    }
-                }
+                templateUrl: "/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/dialogs/" + templateName + ".html"
             });
             return modal.result;
         }
@@ -597,7 +581,7 @@ angular.module("ovh-angular-line-diagnostics").provider("LineDiagnostics", funct
 angular.module('ovh-angular-line-diagnostics').run(['$templateCache', function ($templateCache) {
     'use strict';
 
-    $templateCache.put('/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/dialogs/ovh-angular-line-diagnostics-confirm-intervention-dialog.html', "<oui-modal data-heading=\"{{:: 'tools_lineDiagnostics_confirm_modal_title' | translate }}\" data-type=warning data-primary-action=$close() data-primary-label=\"{{:: 'tools_lineDiagnostics_continue' | translate }}\" data-secondary-action=$dismiss() data-secondary-label=\"{{:: 'tools_lineDiagnostics_cancel' | translate }}\" data-on-dismiss=$dismiss()><p data-translate=tools_lineDiagnostics_confirm_modal_explanation></p><p data-ng-bind=\":: 'tools_lineDiagnostics_confirm_modal_unplug_modem_text' | translate:{ continueButtonLabel }\"></p></oui-modal>");
+    $templateCache.put('/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/dialogs/ovh-angular-line-diagnostics-confirm-intervention-dialog.html', "<oui-modal data-heading=\"{{:: 'tools_lineDiagnostics_confirm_modal_title' | translate }}\" data-type=warning data-primary-action=$close() data-primary-label=\"{{:: 'tools_lineDiagnostics_continue' | translate }}\" data-secondary-action=$dismiss() data-secondary-label=\"{{:: 'tools_lineDiagnostics_cancel' | translate }}\" data-on-dismiss=$dismiss()><p data-translate=tools_lineDiagnostics_confirm_modal_explanation></p><p data-ng-bind=\":: 'tools_lineDiagnostics_confirm_modal_unplug_modem_text' | translate: { continueButtonLabel: ('tools_lineDiagnostics_continue' | translate) }\"></p></oui-modal>");
 
     $templateCache.put('/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/ovh-angular-line-diagnostics.html', "<div class=row><div class=col-md-6><div class=oui-progress-tracker><ol class=oui-progress-tracker__steps><li class=oui-progress-tracker__step data-ng-class=\"{\n" + "                        'oui-progress-tracker__step_active': $ctrl.currentStep === 'detectionStep',\n" + "                        'oui-progress-tracker__step_complete': $ctrl.currentStep !== 'detectionStep'\n" + "                    }\"><span class=oui-progress-tracker__status><span class=oui-progress-tracker__label data-translate=tools_lineDiagnostics_detection_step></span></span></li><li class=oui-progress-tracker__step data-ng-class=\"{\n" + "                        'oui-progress-tracker__step_active': $ctrl.currentStep === 'investigationStep',\n" + "                        'oui-progress-tracker__step_complete': $ctrl.currentStep === 'solutionProposalStep',\n" + "                        'oui-progress-tracker__step_disabled': $ctrl.currentStep === 'detectionStep'\n" + "                    }\"><span class=oui-progress-tracker__status><span class=oui-progress-tracker__label data-translate=tools_lineDiagnostics_investigation_step></span></span></li><li class=oui-progress-tracker__step data-ng-class=\"{\n" + "                        'oui-progress-tracker__step_active': $ctrl.currentStep === 'solutionProposalStep' && !$ctrl.isDiagnosticComplete(),\n" + "                        'oui-progress-tracker__step_complete': $ctrl.isDiagnosticComplete(),\n" + "                        'oui-progress-tracker__step_disabled': $ctrl.currentStep !== 'solutionProposalStep'\n" + "                    }\"><span class=oui-progress-tracker__status><span class=oui-progress-tracker__label data-translate=tools_lineDiagnostics_solution_proposal_step></span></span></li></ol></div></div></div><div class=row><toast-message></toast-message></div><div class=row data-ng-if=\"$ctrl.currentLineDiagnostic.status !== 'problem' || $ctrl.isMonitoringAlreadyExists()\"><div data-ng-if=\"$ctrl.currentStep === 'detectionStep'\" data-ng-include=\"'/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/steps/ovh-angular-line-diagnostics-detection-step.html'\"></div><div data-ng-if=\"$ctrl.currentStep === 'investigationStep'\" data-ng-include=\"'/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/steps/ovh-angular-line-diagnostics-investigation-step.html'\"></div><div data-ng-if=\"$ctrl.currentStep === 'solutionProposalStep'\" data-ng-include=\"'/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/steps/ovh-angular-line-diagnostics-solution-proposal-step.html'\"></div></div><div data-ng-if=\"$ctrl.currentLineDiagnostic.status === 'problem' && !$ctrl.isMonitoringAlreadyExists()\"><oui-message data-type=error><p data-translate=tools_lineDiagnostics_diagnostic_critical_problem_title></p><p data-translate=tools_lineDiagnostics_diagnostic_critical_problem></p></oui-message></div>");
 
