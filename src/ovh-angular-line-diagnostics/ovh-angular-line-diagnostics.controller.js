@@ -225,8 +225,8 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
 
     confirmIntervention () {
         this.openDialog("ovh-angular-line-diagnostics-confirm-intervention-dialog")
-            .then((result) => {
-                if (result) {
+            .then((dialogAnswer) => {
+                if (dialogAnswer) {
                     this.answerQuestion("conditionsAccepted", true);
                 }
             });
@@ -257,7 +257,19 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
     openDialog (templateName) {
         const modal = this.$uibModal.open({
             animation: true,
-            templateUrl: `/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/dialogs/${templateName}.html`
+            controller: [
+                "$scope",
+                "$uibModalInstance",
+                "continueButtonLabel",
+                ($scope, $uibModalInstance, continueButtonLabel) => {
+                    $scope.$close = () => $uibModalInstance.close();
+                    $scope.$dismiss = () => $uibModalInstance.dismiss();
+                    $scope.continueButtonLabel = continueButtonLabel;
+                }],
+            templateUrl: `/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/dialogs/${templateName}.html`,
+            resolve: {
+                continueButtonLabel: () => this.$translate.instant("tools_lineDiagnostics_continue")
+            }
         });
         return modal.result;
     }

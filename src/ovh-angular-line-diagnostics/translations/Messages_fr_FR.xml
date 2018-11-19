@@ -186,7 +186,7 @@
    <!-- Modal -->
    <translation id="tools_lineDiagnostics_confirm_modal_title">Confirmation de demande d'intervention</translation>
    <translation id="tools_lineDiagnostics_confirm_modal_explanation">Afin de finaliser votre demande d'intervention, nous allons réalisé un test technique qui rendra votre <strong>connexion internet indisponible pendant 15 minutes</strong> environ. Merci de prendre toutes les précautions nécessaires à ce cas avant de continuer.</translation>
-   <translation id="tools_lineDiagnostics_confirm_modal_unplug_modem_text">Immédiatement après avoir cliquer sur Continuer, vous devez débrancher votre modem de votre prise téléphonique.</translation>
+   <translation id="tools_lineDiagnostics_confirm_modal_unplug_modem_text">Immédiatement après avoir cliqué sur {{continueButtonLabel}}, vous devez débrancher votre modem de votre prise téléphonique.</translation>
 
    <!-- ERRORS -->
    <translation id="tools_lineDiagnostics_error_context_monitoringTodoAlreadyExists_title" qtlid="407078">Surveillance de la ligne déjà en cours.</translation>

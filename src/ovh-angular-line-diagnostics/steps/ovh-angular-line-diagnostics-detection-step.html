@@ -31,14 +31,14 @@
                         <p class="text-center"
                             data-translate="tools_lineDiagnostics_detection_step_modem_question_help">
                         </p>
-                        <img src="assets/images/diagnostic/broadband-light.png" data-ng-attr-alt="{{:: $ctrl.currentAction }}" />
+                        <img src="assets/images/diagnostic/broadband-light.png" data-ng-attr-alt="{{:: $ctrl.currentAction }}" aria-hidden="true" />
                     </oui-popover-content>
                 </oui-popover>
             </label>
             <oui-radio-toggle-group class="d-inline-block"
                                     data-model="$ctrl.currentLineDiagnostic.data.answers.modemIsSynchronized"
                                     data-on-change="$ctrl.answerQuestion('modemIsSynchronized', modelValue)"
-                                    data-ng-hide="$ctrl.loading">
+                                    data-ng-if="!$ctrl.loading">
                 <oui-radio data-value="true">
                     <span data-translate="tools_lineDiagnostics_detection_step_modem_light_on"></span>
                 </oui-radio>
