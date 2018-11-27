@@ -402,7 +402,8 @@
                 </div>
 
                 <oui-field data-label="{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_comment_title' | translate }}">
-                    <oui-textarea data-model="$ctrl.currentLineDiagnostic.data.answers.comment"
+                    <oui-textarea data-name="comment"
+                                  data-model="$ctrl.currentLineDiagnostic.data.answers.comment"
                                   data-rows="7"
                                   data-minlength="5"
                                   data-maxlength="200"
@@ -411,6 +412,7 @@
 
                 <oui-field data-label="{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_followBySms_title' | translate }}">
                     <oui-radio-toggle-group class="d-inline-block"
+                                            data-name="followBySms"
                                             data-model="$ctrl.currentLineDiagnostic.data.answers.followBySms">
                         <oui-radio data-value="true"
                                    required>
