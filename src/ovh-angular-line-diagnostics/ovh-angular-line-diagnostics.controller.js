@@ -1,6 +1,7 @@
 angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl", class LineDiagnosticsCtrl {
-    constructor ($interval, $timeout, $translate, $uibModal, atInternet, LineDiagnostics, LineDiagnosticFactory, Toast, DIAGNOSTICS_CONSTANTS) {
+    constructor ($interval, $state, $timeout, $translate, $uibModal, atInternet, LineDiagnostics, LineDiagnosticFactory, Toast, DIAGNOSTICS_CONSTANTS) {
         this.$interval = $interval;
+        this.$state = $state; // used in HTML
         this.$timeout = $timeout;
         this.$translate = $translate;
         this.$uibModal = $uibModal;
