@@ -21,7 +21,7 @@
     <div data-ng-if="$ctrl.currentLineDiagnostic.hasQuestionToAnswer('modemIsSynchronized')">
         <form class="form-group"
               novalidate>
-            <label class="oui-label">
+            <label class="oui-label" id="modemIsSynchronizedLabel">
                 <span data-translate="tools_lineDiagnostics_detection_step_modem_question"></span>
                 <oui-popover>
                     <button type="button"
@@ -36,6 +36,7 @@
                 </oui-popover>
             </label>
             <oui-radio-toggle-group class="d-inline-block"
+                                    aria-labelledby="modemIsSynchronizedLabel"
                                     data-model="$ctrl.currentLineDiagnostic.data.answers.modemIsSynchronized"
                                     data-on-change="$ctrl.answerQuestion('modemIsSynchronized', modelValue)"
                                     data-ng-if="!$ctrl.loading">
@@ -49,10 +50,10 @@
                     <span data-translate="tools_lineDiagnostics_detection_step_modem_light_off"></span>
                 </oui-radio>
             </oui-radio-toggle-group>
-            <p data-ng-if="$ctrl.loading">
+            <div data-ng-if="$ctrl.loading">
                 <oui-spinner data-size="s"></oui-spinner>
                 <span class="ml-2" data-translate="tools_lineDiagnostics_please_wait"></span>
-            </p>
+            </div>
         </form>
     </div>
 
@@ -75,10 +76,10 @@
                         data-ng-if="!$ctrl.loading">
                 <span data-translate="tools_lineDiagnostics_detection_step_modem_unplug_confirm">
             </oui-button>
-            <span data-ng-if="$ctrl.loading">
+            <div data-ng-if="$ctrl.loading">
                 <oui-spinner data-size="s"></oui-spinner>
                 <span class="ml-2" data-translate="tools_lineDiagnostics_please_wait"></span>
-            </span>
+            </div>
         </div>
         <div data-ng-if="$ctrl.currentLineDiagnostic.faultType === 'alignment' ||
                          $ctrl.currentLineDiagnostic.faultType === 'syncLossOrLowBandwidth'">
@@ -88,10 +89,10 @@
                         data-ng-if="!$ctrl.loading">
                 <span data-translate="tools_lineDiagnostics_detection_step_continue">
             </oui-button>
-            <span data-ng-if="$ctrl.loading">
+            <div data-ng-if="$ctrl.loading">
                 <oui-spinner data-ng-if="$ctrl.loading" data-size="s"></oui-spinner>
                 <span class="ml-2" data-translate="tools_lineDiagnostics_please_wait"></span>
-            </span>
+            </div>
         </div>
     </div>
 </div>
