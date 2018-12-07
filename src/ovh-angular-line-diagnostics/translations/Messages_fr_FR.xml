@@ -28,6 +28,8 @@
    <translation id="tools_lineDiagnostics_detection_step_modem_light_on">Fixe</translation>
    <translation id="tools_lineDiagnostics_detection_step_modem_light_off">Éteint</translation>
    <translation id="tools_lineDiagnostics_detection_step_modem_light_blink">Clignotant</translation>
+   <translation id="tools_lineDiagnostics_detection_step_info_title">Votre connexion est fonctionnelle.</translation>
+   <translation id="tools_lineDiagnostics_detection_step_info">Si toutefois vous rencontrez un débit anormalement faible ou des pertes de synchronisation, cliquez sur « {{continueButtonLabel}} ».</translation>
    <translation id="tools_lineDiagnostics_detection_step_warning_title">Nous avons détecté un incident sur votre ligne.</translation>
    <translation id="tools_lineDiagnostics_detection_step_warning">Nous allons maintenant lancer un diagnostic de votre ligne pour rétablir votre accès internet rapidement.
    </translation>
