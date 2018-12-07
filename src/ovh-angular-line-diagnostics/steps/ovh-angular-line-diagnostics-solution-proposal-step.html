@@ -429,7 +429,7 @@
                 </oui-checkbox>
 
                 <oui-button data-disabled="!requestInterventionForm.$valid || !$ctrl.currentLineDiagnostic.data.answers.conditionsAccepted"
-                            data-on-click="$ctrl.confirmIntervention()"
+                            data-on-click="$ctrl.answerQuestion('conditionsAccepted', true)"
                             data-variant="primary">
                     <span data-translate="tools_lineDiagnostics_solution_proposal_step_intervention_request_validation"></span>
                 </oui-button>

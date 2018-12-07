@@ -224,15 +224,6 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
         this.startPoller();
     }
 
-    confirmIntervention () {
-        this.openDialog("ovh-angular-line-diagnostics-confirm-intervention-dialog")
-            .then((dialogAnswer) => {
-                if (dialogAnswer) {
-                    this.answerQuestion("conditionsAccepted", true);
-                }
-            });
-    }
-
     showWarning () {
         this.actionRequired = true;
     }
@@ -253,13 +244,5 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
             chapter1: "telecom",
             level2: "Telecom"
         });
-    }
-
-    openDialog (templateName) {
-        const modal = this.$uibModal.open({
-            animation: true,
-            templateUrl: `/ovh-angular-line-diagnostics/src/ovh-angular-line-diagnostics/dialogs/${templateName}.html`
-        });
-        return modal.result;
     }
 });
