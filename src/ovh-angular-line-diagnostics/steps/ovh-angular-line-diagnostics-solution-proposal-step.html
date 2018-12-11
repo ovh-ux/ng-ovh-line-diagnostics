@@ -380,7 +380,8 @@
                 <div class="row">
                     <oui-field class="col-md-6 col-xs-12"
                                data-label="{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_modemType_title' | translate }}"
-                               data-ng-if="$ctrl.currentLineDiagnostic.hasQuestionToAnswer('modemType')">
+                               data-ng-if="$ctrl.currentLineDiagnostic.hasQuestionToAnswer('modemType')"
+                               data-ng-init="$ctrl.setDefaultValue('modemType')">
                         <input class="oui-input"
                                type="text"
                                name="modemType"
@@ -389,7 +390,8 @@
                     </oui-field>
 
                     <oui-field class="col-md-6 col-xs-12"
-                               data-label="{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_contactPhone_title' | translate }}">
+                               data-label="{{:: 'tools_lineDiagnostics_solution_proposal_step_request_form_question_contactPhone_title' | translate }}"
+                               data-ng-init="$ctrl.setDefaultValue('contactPhone')">
                         <input class="oui-input"
                                type="text"
                                name="contactPhone"

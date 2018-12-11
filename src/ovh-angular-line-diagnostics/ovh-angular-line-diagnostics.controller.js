@@ -195,6 +195,10 @@ angular.module("ovh-angular-line-diagnostics").controller("LineDiagnosticsCtrl",
         return _.isEqual(_.get(this.currentLineDiagnostic, "data.error", ""), this.DIAGNOSTICS_CONSTANTS.ERRORS.MONITORING_EXISTS);
     }
 
+    setDefaultValue (answer) {
+        this.currentLineDiagnostic.setDefaultValue(answer);
+    }
+
     addActionDone (action) {
         this.trackAction(action);
         this.actionRequired = false;

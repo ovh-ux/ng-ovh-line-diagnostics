@@ -27,8 +27,6 @@ angular.module("ovh-angular-line-diagnostics").factory("LineDiagnosticFactory", 
             this.faultType = lineDiagnostic.faultType;
             this.status = lineDiagnostic.status;
             this.data = lineDiagnostic.data;
-
-            this.populateDefaultValues();
         }
 
         isLongActionInProgress () {
@@ -96,10 +94,8 @@ angular.module("ovh-angular-line-diagnostics").factory("LineDiagnosticFactory", 
             return !_.isUndefined(question) ? question.defaultValue : null;
         }
 
-        populateDefaultValues () {
-            Object.keys(this.data.answers || {}).forEach((answer) => {
-                this.data.answers[answer] = this.data.answers[answer] || this.getQuestionDefaultValue(answer);
-            });
+        setDefaultValue (answer) {
+            this.data.answers[answer] = this.data.answers[answer] || this.getQuestionDefaultValue(answer);
         }
 
         convertToRequestParams () {
